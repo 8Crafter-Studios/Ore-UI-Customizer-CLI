@@ -2,7 +2,7 @@ import "./zip.js";
 /**
  * The version of the script.
  */
-export declare const format_version: "1.1.2";
+export declare const format_version: "1.1.3";
 /**
  * A class for creating RGB loading bars.
  */

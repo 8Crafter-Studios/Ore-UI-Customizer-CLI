@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.1.2" as const;
+export const format_version = "1.1.3" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -427,7 +427,7 @@ function copyFolder(folder: string, destination: string): void {
             copyFileSync(path.join(folder, item.name), path.join(destination, item.name));
         } else if (item.isDirectory()) {
             try {
-                mkdirSync(path.join(destination, item.name));
+                mkdirSync(path.join(destination, item.name), {recursive: true});
             } catch (e: any) {
                 console.error(e, e?.stack);
             }
