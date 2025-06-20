@@ -1,7 +1,7 @@
 {
     "name": "ore-ui-customizer-cli",
     "version": "1.0.0",
-    "description": "A NodeJS program to automatically apply the latest update of 8Crafter's Ore UI Customizer to your Minecraft installation.",
+    "description": "A CLI to install the latest update of 8Crafter's Ore UI Customizer to your Minecraft installation.",
     "keywords": [
         "8Crafter",
         "Ore",
@@ -10,21 +10,20 @@
         "Updater",
         "Customizer"
     ],
-    "homepage": "https://github.com/8Crafter-Studios/ore-ui-customizer#readme",
+    "homepage": "https://github.com/8Crafter-Studios/ore-ui-customizer-cli#readme",
     "bugs": {
-        "url": "https://github.com/8Crafter-Studios/ore-ui-customizer/issues"
+        "url": "https://github.com/8Crafter-Studios/ore-ui-customizer-cli/issues"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/8Crafter-Studios/ore-ui-customizer.git"
+        "url": "git+https://github.com/8Crafter-Studios/ore-ui-customizer-cli.git"
     },
     "license": "MIT",
     "author": "8Crafter",
     "type": "module",
     "main": "lib/index.js",
     "bin": {
-        "ore-ui-customizer": "bin/ore-ui-customizer",
-        "ore-ui-customizer-cli": "bin/ore-ui-customizer"
+        "ore-ui-customizer-cli": "bin/ore-ui-customizer-cli"
     },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
