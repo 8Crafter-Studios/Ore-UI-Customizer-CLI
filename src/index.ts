@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.0.1" as const;
+export const format_version = "1.1.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments

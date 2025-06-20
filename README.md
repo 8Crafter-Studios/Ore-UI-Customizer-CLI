@@ -16,6 +16,8 @@ https://www.8crafter.com/utilities/ore-ui-customizer
 
 Using this requires that you either use [Bedrock Launcher](https://bedrocklauncher.github.io/) or IObit Unlocker (Bedrock Launcher is recommended).
 
+This node module also requires that you use Windows.
+
 This module MUST BE INSTALLED GLOBALLY!
 
 ## Installation
