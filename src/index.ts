@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.1.0" as const;
+export const format_version = "1.1.1" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -83,12 +83,12 @@ async function getOreUICustomizerAPIDataURI(): Promise<string> {
             ts?: string;
         };
         dependencies: { js: string; dts?: string; ts?: string; currentImportStatementText: string }[];
-    } = (await (await fetch(path.join(baseURL, "ore-ui-customizer-api.dependencies.json"))).json()) as any;
+    } = (await (await fetch(new URL("ore-ui-customizer-api.dependencies.json", baseURL).href)).json()) as any;
     let scriptData: string = /* readFileSync(
         path.join(import.meta.dirname, "./ore-ui-customizer-api.js")
-    ).toString(); */ await (await fetch(path.join(baseURL, dependenciesData.main_script.js))).text();
+    ).toString(); */ await (await fetch(new URL(dependenciesData.main_script.js, baseURL).href)).text();
     for (const dependency of dependenciesData.dependencies) {
-        const dependencyScriptData: string = await (await fetch(path.join(baseURL, dependency.js))).text();
+        const dependencyScriptData: string = await (await fetch(new URL(dependency.js, baseURL).href)).text();
         const dependencyScriptDataURI: string = `data:text/javascript;base64,${Buffer.from(dependencyScriptData).toString("base64")}`;
         scriptData = scriptData.replaceAll(dependency.currentImportStatementText, dependencyScriptDataURI);
     }
