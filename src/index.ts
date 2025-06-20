@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.1.1" as const;
+export const format_version = "1.1.2" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -75,7 +75,7 @@ if (mode === "uninstall" && (await checkIfProcessIsRunning("Minecraft.Windows.ex
  * @returns {Promise<string>} A promise resolving with the data URI to use to import the 8Crafter's Ore UI Customizer API.
  */
 async function getOreUICustomizerAPIDataURI(): Promise<string> {
-    const baseURL = "https://www.8crafter.com/api/dependency_lists";
+    const baseURL = "https://www.8crafter.com/api/dependency_lists/";
     const dependenciesData: {
         main_script: {
             js: string;
