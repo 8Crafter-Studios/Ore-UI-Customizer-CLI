@@ -8,11 +8,12 @@ import type { ApplyModsResult } from "OreUICustomizerAPI";
 import type { OreUICustomizerSettings } from "OreUICustomizerAssets";
 import { exec } from "child_process";
 import * as CommentJSON from "comment-json";
+import progress from "progress";
 
 /**
  * The version of the script.
  */
-export const format_version = "1.0.0" as const;
+export const format_version = "1.0.1" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -546,14 +547,293 @@ async function checkIfProcessIsRunning(query: string): Promise<boolean> {
     });
 }
 
+/**
+ *
+ * @param rgb
+ * @param degree
+ * @returns
+ *
+ * @see https://stackoverflow.com/a/17433060/16872762
+ */
+function changeHue(rgb: string, degree: number) {
+    var hsl = rgbToHSL(rgb);
+    hsl.h += degree;
+    if (hsl.h > 360) {
+        hsl.h -= 360;
+    } else if (hsl.h < 0) {
+        hsl.h += 360;
+    }
+    return hslToRGB(hsl);
+}
+
+/**
+ *
+ * @param rgb
+ * @returns
+ *
+ * @see https://stackoverflow.com/a/17433060/16872762
+ */
+function rgbToHSL(rgb: string) {
+    // strip the leading # if it's there
+    rgb = rgb.replace(/^\s*#|\s*$/g, "");
+
+    // convert 3 char codes --> 6, e.g. `E0F` --> `EE00FF`
+    if (rgb.length == 3) {
+        rgb = rgb.replace(/(.)/g, "$1$1");
+    }
+
+    var r = parseInt(rgb.substr(0, 2), 16) / 255,
+        g = parseInt(rgb.substr(2, 2), 16) / 255,
+        b = parseInt(rgb.substr(4, 2), 16) / 255,
+        cMax = Math.max(r, g, b),
+        cMin = Math.min(r, g, b),
+        delta = cMax - cMin,
+        l = (cMax + cMin) / 2,
+        h = 0,
+        s = 0;
+
+    if (delta == 0) {
+        h = 0;
+    } else if (cMax == r) {
+        h = 60 * (((g - b) / delta) % 6);
+    } else if (cMax == g) {
+        h = 60 * ((b - r) / delta + 2);
+    } else {
+        h = 60 * ((r - g) / delta + 4);
+    }
+
+    if (delta == 0) {
+        s = 0;
+    } else {
+        s = delta / (1 - Math.abs(2 * l - 1));
+    }
+
+    return {
+        h: h,
+        s: s,
+        l: l,
+    };
+}
+
+/**
+ *
+ * @param hsl
+ * @returns
+ *
+ * @see https://stackoverflow.com/a/17433060/16872762
+ */
+function hslToRGB(hsl: { h: number; s: number; l: number }) {
+    var h = hsl.h,
+        s = hsl.s,
+        l = hsl.l,
+        c = (1 - Math.abs(2 * l - 1)) * s,
+        x = c * (1 - Math.abs(((h / 60) % 2) - 1)),
+        m = l - c / 2,
+        r,
+        g,
+        b;
+
+    if (h < 60) {
+        r = c;
+        g = x;
+        b = 0;
+    } else if (h < 120) {
+        r = x;
+        g = c;
+        b = 0;
+    } else if (h < 180) {
+        r = 0;
+        g = c;
+        b = x;
+    } else if (h < 240) {
+        r = 0;
+        g = x;
+        b = c;
+    } else if (h < 300) {
+        r = x;
+        g = 0;
+        b = c;
+    } else {
+        r = c;
+        g = 0;
+        b = x;
+    }
+
+    r = normalize_rgb_value(r, m);
+    g = normalize_rgb_value(g, m);
+    b = normalize_rgb_value(b, m);
+
+    return rgbToHex(r, g, b);
+}
+
+/**
+ *
+ * @param color
+ * @param m
+ * @returns
+ *
+ * @see https://stackoverflow.com/a/17433060/16872762
+ */
+function normalize_rgb_value(color: number, m: number) {
+    color = Math.floor((color + m) * 255);
+    if (color < 0) {
+        color = 0;
+    }
+    return color;
+}
+
+/**
+ *
+ * @param r
+ * @param g
+ * @param b
+ * @returns
+ *
+ * @see https://stackoverflow.com/a/17433060/16872762
+ */
+function rgbToHex(r: number, g: number, b: number) {
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+function hexToRGB(hex: string) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? { r: parseInt(result[1]!, 16), g: parseInt(result[2]!, 16), b: parseInt(result[3]!, 16) } : null;
+}
+
+/**
+ * A class for creating RGB loading bars.
+ */
+export class RGBLoadingBar {
+    /**
+     * Whether the loading bar is active or not.
+     */
+    #loadingBarActive: boolean = false;
+    /**
+     * Whether the loading bar should be stopped or not.
+     */
+    #stopLoadingBar: boolean = false;
+    /**
+     * Whether the loading bar is active or not.
+     */
+    public get loadingBarActive(): boolean {
+        return this.#loadingBarActive;
+    }
+    /**
+     * Whether the loading bar is in the process of stopping or not.
+     */
+    public get loadingBarIsStopping(): boolean {
+        return this.#stopLoadingBar;
+    }
+    /**
+     * Creates an instance of RGBLoadingBar.
+     */
+    public constructor() {}
+    /**
+     * Starts the loading bar.
+     *
+     * @returns {Promise<void>} A promise that resolves when the loading bar is stopped.
+     *
+     * @throws {Error} If the loading bar is already active.
+     */
+    public async startLoadingBar(): Promise<void> {
+        if (this.#loadingBarActive) {
+            throw new Error("Loading bar is already active.");
+        }
+        /**
+         * The width of the loading bar.
+         *
+         * This is how many characters the bar consists of.
+         */
+        const barWidth = 40;
+        /**
+         * The hue span of the loading bar.
+         *
+         * This is how much the hue changes from the left side of the bar to the right side.
+         */
+        const hueSpan = 60;
+        /**
+         * The hue step of the loading bar.
+         *
+         * This is how much the hue is shifted each frame.
+         */
+        const hueStep = 5;
+        /**
+         * The FPS of the loading bar animation.
+         *
+         * This is how many times per second the loading bar is updated, setting this too high may result in the loading bar having a buggy appearance.
+         */
+        const barAnimationFPS = 10;
+
+        this.#loadingBarActive = true;
+        let i = 0;
+        process.stdout.write("\n");
+        // let c = { r: 0, g: 255, b: 0 };
+        while (!this.#stopLoadingBar) {
+            i = (i + hueStep) % 360;
+            if (i < 0) {
+                i += 360;
+            }
+            // c = hexToRGB(changeHue(rgbToHex(0, 255, 0), i))!;
+            // const selectedColor = "rgb"[Math.floor(Math.random()*3)]! as "r" | "g" | "b";
+            // c[selectedColor] = Math.floor(Math.random()*80);
+            let str: string = "";
+            for (let j = 0; j < barWidth; j++) {
+                // const charColor = [Math.floor(Math.abs(c.r - 40)/40*255), Math.floor(Math.abs(c.g - 40)/40*255), Math.floor(Math.abs(c.b - 40)/40*255)] as const;
+                // let colorValue: number = Math.max(Math.min(Math.floor((1 - /* Math.sqrt */ Math.abs(j - Math.abs(i - 40)) / 20) * 255), 255), 0);
+                // isNaN(colorValue) && (colorValue = 0);
+                // const charColor = [0, colorValue, 0] as const;
+                const c = hexToRGB(changeHue(rgbToHex(0, 255, 0), Math.abs(Math.floor((360 - i + (j / barWidth) * hueSpan) % 360))))!;
+                const charColor = [c.r, c.g, c.b] as const;
+                str += `\x1b[38;2;${charColor[0]};${charColor[1]};${charColor[2]}m█`;
+            }
+            process.stdout.moveCursor(0, -1);
+            process.stdout.clearLine(1);
+            process.stdout.write(str + "\x1b[0m\r\n");
+            process.stdout.moveCursor(0, 1);
+            await new Promise((resolve) => setTimeout(resolve, 1000 / barAnimationFPS));
+        }
+        process.stdout.moveCursor(0, -1);
+        process.stdout.clearLine(1);
+        this.#loadingBarActive = false;
+    }
+    /**
+     * Stops the loading bar.
+     *
+     * @returns {Promise<void>} A promise that resolves when the loading bar is stopped.
+     */
+    public async stopLoadingBar(): Promise<void> {
+        this.#stopLoadingBar = true;
+        while (this.#loadingBarActive) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        this.#stopLoadingBar = false;
+    }
+    /**
+     * Waits until the loading bar is started.
+     */
+    public async waitUntilLoadingBarIsStarted(): Promise<void> {
+        while (!this.#loadingBarActive) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+    }
+}
+
 switch (mode) {
     case "install": {
         /**
+         * The loading bar instance.
+         */
+        const loadingBar: RGBLoadingBar = new RGBLoadingBar();
+
+        /**
          * The zip folder blob with the original GUI folder.
          */
-        const originalZipData: Blob = new Blob([readFileSync(path.join(versionFolder, "data/gui_mc-v1.21.90_PC.zip"))]); /* await getZip(versionFolder) */
+        const originalZipData: Blob = /* new Blob([readFileSync(path.join(versionFolder, "data/gui_mc-v1.21.90_PC.zip"))]) */ await getZip(versionFolder);
 
-        console.log("Applying Mods");
+        console.log(chalk.bgBlack(chalk.rgb(255, 0, 175)("Applying mods, this may take a while.")));
+
+        loadingBar.startLoadingBar();
+        await loadingBar.waitUntilLoadingBarIsStarted();
 
         /**
          * The zip folder blob with the modded GUI folder.
@@ -565,18 +845,39 @@ switch (mode) {
             settings: configData,
         });
 
-        console.log("Applying Modded Zip");
+        await loadingBar.stopLoadingBar();
+
+        process.stdout.moveCursor(0, -1);
+        process.stdout.clearLine(1);
+
+        console.log(chalk.bgBlack(chalk.rgb(255, 0, 175)("Applying modded zip, this may take a while.")));
+
+        loadingBar.startLoadingBar();
+        await loadingBar.waitUntilLoadingBarIsStarted();
 
         await applyModdedZip(moddedZipData.zip, versionFolder);
 
-        // uninstallOreUICustomizer(versionFolder);
+        await loadingBar.stopLoadingBar();
 
-        console.log("Ore UI Customizer installed successfully.");
+        process.stdout.moveCursor(0, -1);
+        process.stdout.clearLine(1);
 
-        console.log(moddedZipData.allFailedReplaces);
+        console.log(chalk.greenBright("Ore UI Customizer installed successfully."));
 
         if (enableDebugLogging) {
             console.log(`Installed in the following folder: ${versionFolder}`);
+        }
+
+        if (Object.keys(moddedZipData.allFailedReplaces).length > 0) {
+            console.log(
+                chalk.yellow(
+                    `Some customizations failed, this could be due to the provided file being modified, or that version is not supported for the failed customizations: ${JSON.stringify(
+                        moddedZipData.allFailedReplaces,
+                        null,
+                        4
+                    )}`
+                )
+            );
         }
         break;
     }
@@ -591,5 +892,6 @@ switch (mode) {
     case "exportConfig": {
         const exportLocation = prompt("Please enter the path to export the config to: ");
         writeFileSync(exportLocation, CommentJSON.stringify({ ...configData, format_version: configDataVersion }, null, 4));
+        break;
     }
 }
