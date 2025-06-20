@@ -6,14 +6,14 @@ import semver from "semver";
 import "./zip.js";
 import type { ApplyModsResult } from "OreUICustomizerAPI";
 import type { OreUICustomizerSettings } from "OreUICustomizerAssets";
-import { exec } from "child_process";
+import { exec, type ExecException } from "child_process";
 import * as CommentJSON from "comment-json";
 import progress from "progress";
 
 /**
  * The version of the script.
  */
-export const format_version = "1.1.3" as const;
+export const format_version = "1.2.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -103,7 +103,7 @@ await getOreUICustomizerAPIDataURI();
  * @see {@link https://www.8crafter.com/assets/shared/ore-ui-customizer-assets.js}
  * @see {@link https://www.8crafter.com/utilities/ore-ui-customizer}
  */
-const oreUICustomizerAPI: typeof import("OreUICustomizerAPI") = await import(await getOreUICustomizerAPIDataURI(), { with: {} });
+export const oreUICustomizerAPI: typeof import("OreUICustomizerAPI") = await import(await getOreUICustomizerAPIDataURI(), { with: {} });
 /**
  * A function to get user input.
  *
@@ -115,7 +115,7 @@ const prompt: promptSync.Prompt = promptSync({ sigint: true });
  *
  * This is the same folder you are sent to if your type `%AppData%/../../` in the `WIN+R` Run dialog.
  */
-const userFolderPath: string = import.meta.dirname.split(path.sep).slice(0, 3).join(path.sep);
+export const userFolderPath: string = import.meta.dirname.split(path.sep).slice(0, 3).join(path.sep);
 // Check if the user folder path is valid.
 if (!new RegExp(`[A-Z]:${path.sep === "\\" ? "\\\\" : path.sep}Users${path.sep === "\\" ? "\\\\" : path.sep}`).test(userFolderPath)) {
     console.error(`Invalid user folder path, please make sure this package is installed globally: "${userFolderPath}"`);
@@ -124,7 +124,7 @@ if (!new RegExp(`[A-Z]:${path.sep === "\\" ? "\\\\" : path.sep}Users${path.sep =
 /**
  * The path to the Bedrock Launcher data folder.
  */
-const mcBedrockFolderPath = path.join(userFolderPath, "AppData/Roaming/.minecraft_bedrock");
+export const mcBedrockFolderPath = path.join(userFolderPath, "AppData/Roaming/.minecraft_bedrock");
 /**
  * The type of Minecraft Bedrock Edition installation to install 8Crafter's Ore UI Customizer on.
  */
@@ -417,7 +417,13 @@ try {
     }
 }
 
-function copyFolder(folder: string, destination: string): void {
+/**
+ * Copies a folder.
+ *
+ * @param {string} folder The folder to copy.
+ * @param {string} destination The destination folder.
+ */
+export function copyFolder(folder: string, destination: string): void {
     try {
         mkdirSync(destination, { recursive: true });
     } catch (e) {}
@@ -427,7 +433,7 @@ function copyFolder(folder: string, destination: string): void {
             copyFileSync(path.join(folder, item.name), path.join(destination, item.name));
         } else if (item.isDirectory()) {
             try {
-                mkdirSync(path.join(destination, item.name), {recursive: true});
+                mkdirSync(path.join(destination, item.name), { recursive: true });
             } catch (e: any) {
                 console.error(e, e?.stack);
             }
@@ -436,7 +442,14 @@ function copyFolder(folder: string, destination: string): void {
     }
 }
 
-async function getZip(versionFolder: string): Promise<Blob> {
+/**
+ * Get the zip file of the version's GUI folder.
+ *
+ * @param {string} versionFolder The path to the version folder.
+ * @param {typeof accessType} accessMode The access mode.
+ * @returns {Promise<Blob>} A promise that resolves with the zip file.
+ */
+export async function getZip(versionFolder: string, accessMode: typeof accessType): Promise<Blob> {
     const zipFs: zip.FS = new zip.fs.FS();
     function addFolderContents(directoryEntry: zip.ZipDirectoryEntry, basePath: string, folder: string = ""): void {
         const folderContents = readdirSync(path.join(basePath, folder), { withFileTypes: true });
@@ -451,14 +464,38 @@ async function getZip(versionFolder: string): Promise<Blob> {
     if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
         addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui_vanilla_backup"));
     } else {
-        copyFolder(path.join(versionFolder, "data/gui"), path.join(versionFolder, "data/gui_vanilla_backup"));
+        if (accessMode === "BedrockLauncher") {
+            copyFolder(path.join(versionFolder, "data/gui"), path.join(versionFolder, "data/gui_vanilla_backup"));
+        } else if (accessMode === "IObit Unlocker") {
+            /**
+             * The path to the temp folder to use to apply the zip.
+             */
+            const tempPath = path.join(
+                userFolderPath,
+                "AppData",
+                "Roaming",
+                "8Crafter's Ore UI Customizer",
+                path.basename(versionFolder),
+                "data",
+                "gui_vanilla_backup"
+            );
+            copyFolder(path.join(versionFolder, "data/gui"), tempPath);
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${tempPath}" "${path.join(versionFolder, "data")}"`);
+            rmSync(tempPath, { recursive: true, force: true });
+        }
         addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui"));
     }
 
     return await zipFs.exportBlob();
 }
 
-async function getCurrentCustomizerConfigurationAndVersion(versionFolder: string): Promise<
+/**
+ * Get the config data for 8Crafter's Ore UI Customizer from the specified version folder.
+ *
+ * @param {string} versionFolder The path to the version folder.
+ * @returns A promise that resolves with the config data, or `undefined` if the config file is not found.
+ */
+export async function getCurrentCustomizerConfigurationAndVersion(versionFolder: string): Promise<
     | {
           oreUICustomizerConfig: OreUICustomizerSettings;
           oreUICustomizerVersion: string;
@@ -471,13 +508,16 @@ async function getCurrentCustomizerConfigurationAndVersion(versionFolder: string
     return readJSCustomizerConfigFile(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"));
 }
 
-async function readJSCustomizerConfigFile(filePath: string): Promise<
-    | {
-          oreUICustomizerConfig: OreUICustomizerSettings;
-          oreUICustomizerVersion: string;
-      }
-    | undefined
-> {
+/**
+ * Read a JavaScript config file for 8Crafter's Ore UI Customizer.
+ *
+ * @param {string} filePath The path to the config file.
+ * @returns A promise that resolves with the config data.
+ */
+export async function readJSCustomizerConfigFile(filePath: string): Promise<{
+    oreUICustomizerConfig: OreUICustomizerSettings;
+    oreUICustomizerVersion: string;
+}> {
     const configFile: {
         oreUICustomizerConfig: OreUICustomizerSettings;
         oreUICustomizerVersion: string;
@@ -487,11 +527,24 @@ async function readJSCustomizerConfigFile(filePath: string): Promise<
     return configFile;
 }
 
-function uninstallOreUICustomizer(versionFolder: string): void {
+/**
+ * Uninstall 8Crafter's Ore UI Customizer from a version.
+ *
+ * @param {string} versionFolder The path to the version folder of the version to uninstall 8Crafter's Ore UI Customizer from.
+ * @returns {Promise<void>} A promise that resolves when the uninstallation is complete.
+ */
+export async function uninstallOreUICustomizer(versionFolder: string): Promise<void> {
     if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
-        rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
-        copyFolder(path.join(versionFolder, "data/gui_vanilla_backup"), path.join(versionFolder, "data/gui"));
-        rmSync(path.join(versionFolder, "data/gui_vanilla_backup"), { recursive: true, force: true });
+        if (accessType === "BedrockLauncher") {
+            rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
+            copyFolder(path.join(versionFolder, "data/gui_vanilla_backup"), path.join(versionFolder, "data/gui"));
+            rmSync(path.join(versionFolder, "data/gui_vanilla_backup"), { recursive: true, force: true });
+        } else if (accessType === "IObit Unlocker") {
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
+            await runCommmand(
+                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Rename "${path.join(versionFolder, "data/gui_vanilla_backup")}" "gui"`
+            );
+        }
     } else {
         if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
             throw new ReferenceError(
@@ -502,9 +555,27 @@ function uninstallOreUICustomizer(versionFolder: string): void {
     }
 }
 
-async function applyModdedZip(moddedZip: Blob, versionFolder: string): Promise<void> {
-    const zipFs = new zip.fs.FS();
+/**
+ * Apply a modded zip to a version.
+ *
+ * @param {Blob} moddedZip The modded zip to apply.
+ * @param {string} versionFolder The path to the version folder of the version to apply the modded zip to.
+ * @returns {Promise<void>} A promise that resolves when the modded zip is applied.
+ */
+export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Promise<void> {
+    /**
+     * The zip file system.
+     */
+    const zipFs: zip.FS = new zip.fs.FS();
     await zipFs.importBlob(moddedZip);
+    /**
+     * Recursively add the contents of the zip folder to a destination folder.
+     *
+     * @param {zip.ZipDirectoryEntry} directoryEntry The zip directory entry to extract the contents from.
+     * @param {string} basePath The base path to extract the contents to.
+     * @param {string} destinationFolder The subfolder of the zip and base path to extract the contents from and to respectively.
+     * @returns {Promise<void>} A promise that resolves when the contents are extracted.
+     */
     async function addFolderContentsReversed(directoryEntry: zip.ZipDirectoryEntry, basePath: string, destinationFolder: string = ""): Promise<void> {
         const folderContents = directoryEntry.children;
         for (const item of folderContents) {
@@ -519,43 +590,62 @@ async function applyModdedZip(moddedZip: Blob, versionFolder: string): Promise<v
         }
     }
     try {
-        rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
+        if (accessType === "BedrockLauncher") {
+            rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
+        } else if (accessType === "IObit Unlocker") {
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
+        }
     } catch {}
-    await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, path.join(versionFolder, "data/gui"));
+    if (accessType === "BedrockLauncher") {
+        await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, path.join(versionFolder, "data/gui"));
+    } else if (accessType === "IObit Unlocker") {
+        /**
+         * The path to the temp folder to use to apply the zip.
+         */
+        const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
+        await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
+        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Move "${tempPath}" "${path.join(versionFolder, "data")}"`);
+    }
 }
 
-async function checkIfProcessIsRunning(query: string): Promise<boolean> {
+/**
+ * Checks if a process is running.
+ *
+ * @param {string} query The name of the executable for the process.
+ * @returns {Promise<boolean>} A promise that resolves with `true` if the process is running, `false` otherwise.
+ */
+export async function checkIfProcessIsRunning(query: string): Promise<boolean> {
     return new Promise((resolve: (value: boolean) => void) => {
-        let platform = process.platform;
-        let cmd = "";
-        switch (platform) {
-            case "win32":
-                cmd = `tasklist`;
-                break;
-            case "darwin":
-                cmd = `ps -ax | grep ${query}`;
-                break;
-            case "linux":
-                cmd = `ps -A`;
-                break;
-            default:
-                break;
-        }
-        exec(cmd, (err, stdout, stderr) => {
+        exec("tasklist", (_err: ExecException | null, stdout: string, _stderr: string) => {
             resolve(stdout.toLowerCase().indexOf(query.toLowerCase()) > -1);
         });
     });
 }
 
 /**
+ * Runs a command.
  *
- * @param rgb
- * @param degree
- * @returns
+ * @param {string} command The command to run.
+ * @returns A promise that resolves with the results of the command.
+ */
+export async function runCommmand(command: string): Promise<{ err: ExecException | null; stdout: string; stderr: string }> {
+    return new Promise((resolve: (value: { err: ExecException | null; stdout: string; stderr: string }) => void) => {
+        exec(command, (err: ExecException | null, stdout: string, stderr: string) => {
+            resolve({ err, stdout, stderr });
+        });
+    });
+}
+
+/**
+ * Changes the hue of a color.
+ *
+ * @param {string} rgb The hex color code to change the hue of.
+ * @param {number} degree The degree to change the hue by.
+ * @returns {string} The new hex color code with the hue shift applied.
  *
  * @see https://stackoverflow.com/a/17433060/16872762
  */
-function changeHue(rgb: string, degree: number) {
+export function changeHue(rgb: string, degree: number): string {
     var hsl = rgbToHSL(rgb);
     hsl.h += degree;
     if (hsl.h > 360) {
@@ -567,13 +657,14 @@ function changeHue(rgb: string, degree: number) {
 }
 
 /**
+ * Converts a hex color code to HSL.
  *
- * @param rgb
- * @returns
+ * @param {string} rgb The hex color code to convert to HSL.
+ * @returns {{ h: number; s: number; l: number; }} The HSL values of the color.
  *
  * @see https://stackoverflow.com/a/17433060/16872762
  */
-function rgbToHSL(rgb: string) {
+export function rgbToHSL(rgb: string): { h: number; s: number; l: number } {
     // strip the leading # if it's there
     rgb = rgb.replace(/^\s*#|\s*$/g, "");
 
@@ -616,13 +707,14 @@ function rgbToHSL(rgb: string) {
 }
 
 /**
+ * Converts HSL values to a hex color code.
  *
- * @param hsl
- * @returns
+ * @param {{ h: number; s: number; l: number }} hsl The HSL values.
+ * @returns {string} The RGB hex code.
  *
  * @see https://stackoverflow.com/a/17433060/16872762
  */
-function hslToRGB(hsl: { h: number; s: number; l: number }) {
+export function hslToRGB(hsl: { h: number; s: number; l: number }): string {
     var h = hsl.h,
         s = hsl.s,
         l = hsl.l,
@@ -667,14 +759,15 @@ function hslToRGB(hsl: { h: number; s: number; l: number }) {
 }
 
 /**
+ * Normalizes a color value.
  *
- * @param color
- * @param m
- * @returns
+ * @param {number} color The color value to normalize.
+ * @param {number} m UNDOCUMENTED
+ * @returns {number} The normalized color value.
  *
  * @see https://stackoverflow.com/a/17433060/16872762
  */
-function normalize_rgb_value(color: number, m: number) {
+export function normalize_rgb_value(color: number, m: number): number {
     color = Math.floor((color + m) * 255);
     if (color < 0) {
         color = 0;
@@ -683,19 +776,28 @@ function normalize_rgb_value(color: number, m: number) {
 }
 
 /**
+ * Converts RGB values to a hex color code.
  *
- * @param r
- * @param g
- * @param b
- * @returns
+ * @param {number} r The red value of the color.
+ * @param {number} g The green value of the color.
+ * @param {number} b The blue value of the color.
+ * @returns {string} The hex color code.
  *
  * @see https://stackoverflow.com/a/17433060/16872762
  */
-function rgbToHex(r: number, g: number, b: number) {
+export function rgbToHex(r: number, g: number, b: number): string {
     return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
-function hexToRGB(hex: string) {
+/**
+ * Converts a hex color code to RGB.
+ *
+ * @param {string} hex The hex color code to convert to RGB.
+ * @returns {{ r: number; g: number; b: number; } | null} The RGB values of the color, or null if the color is invalid.
+ *
+ * @author 8Crafter
+ */
+export function hexToRGB(hex: string): { r: number; g: number; b: number } | null {
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? { r: parseInt(result[1]!, 16), g: parseInt(result[2]!, 16), b: parseInt(result[3]!, 16) } : null;
 }
@@ -820,6 +922,11 @@ export class RGBLoadingBar {
 
 switch (mode) {
     case "install": {
+        if (accessType === "IObit Unlocker" && !existsSync("C:/Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe")) {
+            throw new ReferenceError(
+                "Cannot use IObit Unlocker, IObit Unlocker is not installed. You must have either Bedrock Launcher or IObit Unlocker installed to use this CLI."
+            );
+        }
         /**
          * The loading bar instance.
          */
@@ -828,7 +935,10 @@ switch (mode) {
         /**
          * The zip folder blob with the original GUI folder.
          */
-        const originalZipData: Blob = /* new Blob([readFileSync(path.join(versionFolder, "data/gui_mc-v1.21.90_PC.zip"))]) */ await getZip(versionFolder);
+        const originalZipData: Blob = /* new Blob([readFileSync(path.join(versionFolder, "data/gui_mc-v1.21.90_PC.zip"))]) */ await getZip(
+            versionFolder,
+            accessType
+        );
 
         console.log(chalk.bgBlack(chalk.rgb(255, 0, 175)("Applying mods, this may take a while.")));
 
@@ -882,6 +992,11 @@ switch (mode) {
         break;
     }
     case "uninstall": {
+        if (accessType === "IObit Unlocker" && !existsSync("C:/Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe")) {
+            throw new ReferenceError(
+                "Cannot use IObit Unlocker, IObit Unlocker is not installed. You must have either Bedrock Launcher or IObit Unlocker installed to use this CLI."
+            );
+        }
         uninstallOreUICustomizer(versionFolder);
         console.log("Ore UI Customizer uninstalled successfully.");
         if (enableDebugLogging) {

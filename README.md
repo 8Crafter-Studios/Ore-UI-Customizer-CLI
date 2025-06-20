@@ -35,6 +35,7 @@ ore-ui-customizer-cli [options]             Install the Ore UI Customizer.
 
 Options:
   --config=<path>                       The path to the configuration file to use, if not specified it will try to find a config from one of your other Minecraft versions if you use bedrock launcher, or if you use IObit Unlocker, it will search the release and preview versions, if no config is found, it will use the default config.
-  --uninstall                           Uninstall the Ore UI Customizer.
+  -r, --uninstall                       Uninstall the Ore UI Customizer.
   -ec, --exportconfig                   Export the configuration file.
+  --debug                               Enable debug logging.
 ```
