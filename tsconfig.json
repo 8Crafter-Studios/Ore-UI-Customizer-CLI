@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "outDir": "./lib",
+        "rootDir": "./src",
+        "declaration": true,
+        "declarationDir": "./lib",
+        "sourceMap": false,
+        "declarationMap": false,
+        "lib": ["ES2022"],
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "verbatimModuleSyntax": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "resolveJsonModule": true
+    }
+}
