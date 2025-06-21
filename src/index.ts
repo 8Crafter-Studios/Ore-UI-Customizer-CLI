@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.5.0" as const;
+export const format_version = "1.6.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -57,6 +57,8 @@ const sourceWebsite: string = new URL(
         ?.slice("--source-website=".length)
         .replace(/(?<!\/)$/, "/") || "https://www.8crafter.com/"
 ).href;
+
+const useBackupFolderFromAppData: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--use-app-data-backup-folder");
 
 /**
  * The mode of the script.
@@ -469,7 +471,21 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
             }
         }
     }
-    if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
+    /**
+     * The path to the temp folder to use to apply the zip.
+     */
+    const tempPath = path.join(
+        userFolderPath,
+        "AppData",
+        "Roaming",
+        "8Crafter's Ore UI Customizer",
+        path.basename(versionFolder),
+        "data",
+        "gui_vanilla_backup"
+    );
+    if (useBackupFolderFromAppData && existsSync(tempPath)) {
+        addFolderContents(zipFs.addDirectory("gui"), tempPath);
+    } else if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
         addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui_vanilla_backup"));
     } else {
         if (accessMode === "BedrockLauncher") {
@@ -489,7 +505,9 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
             );
             rmSync(tempPath, { recursive: true, force: true });
             copyFolder(path.join(versionFolder, "data/gui"), tempPath);
-            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`);
+            await runCommmand(
+                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`
+            );
         }
         addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui"));
     }
@@ -613,7 +631,9 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
         const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
         rmSync(tempPath, { recursive: true, force: true });
         await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
-        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`);
+        await runCommmand(
+            `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`
+        );
     }
 }
 
