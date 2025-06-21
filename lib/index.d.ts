@@ -4,7 +4,7 @@ import { type ExecException } from "child_process";
 /**
  * The version of the script.
  */
-export declare const format_version: "1.6.0";
+export declare const format_version: "1.7.0";
 /**
  * API for 8Crafter's Ore UI Customizer.
  *
@@ -34,6 +34,14 @@ declare let accessType: "BedrockLauncher" | "IObit Unlocker";
  * @param {string} destination The destination folder.
  */
 export declare function copyFolder(folder: string, destination: string): void;
+/**
+ * Copies a folder using IObit Unlocker.
+ *
+ * @param {string} folder The folder to copy.
+ * @param {string} destination The destination folder.
+ * @returns {Promise<void>} A promise that resolves when the folder is copied.
+ */
+export declare function copyFolderIObitMode(folder: string, destination: string): Promise<void>;
 /**
  * Get the zip file of the version's GUI folder.
  *

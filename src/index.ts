@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.6.0" as const;
+export const format_version = "1.7.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -59,6 +59,8 @@ const sourceWebsite: string = new URL(
 ).href;
 
 const useBackupFolderFromAppData: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--use-app-data-backup-folder");
+
+const fileByFileMode: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--file-by-file-mode");
 
 /**
  * The mode of the script.
@@ -453,6 +455,35 @@ export function copyFolder(folder: string, destination: string): void {
 }
 
 /**
+ * Copies a folder using IObit Unlocker.
+ *
+ * @param {string} folder The folder to copy.
+ * @param {string} destination The destination folder.
+ * @returns {Promise<void>} A promise that resolves when the folder is copied.
+ */
+export async function copyFolderIObitMode(folder: string, destination: string): Promise<void> {
+    try {
+        mkdirSync(destination, { recursive: true });
+    } catch (e) {}
+    const folderContents = readdirSync(folder, { withFileTypes: true });
+    const listOfFilesToCopy: string[] = [];
+    for (const item of folderContents) {
+        if (item.isFile()) {
+            listOfFilesToCopy.push(path.join(folder, item.name));
+        } else if (item.isDirectory()) {
+            /* try {
+                mkdirSync(path.join(destination, item.name), { recursive: true });
+            } catch (e: any) {
+                console.error(e, e?.stack);
+            } */
+            await copyFolderIObitMode(path.join(folder, item.name), path.join(destination, item.name));
+        }
+    }
+    if (listOfFilesToCopy.length === 0) return;
+    await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${listOfFilesToCopy.join('","')}" "${destination}"`);
+}
+
+/**
  * Get the zip file of the version's GUI folder.
  *
  * @param {string} versionFolder The path to the version folder.
@@ -631,9 +662,13 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
         const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
         rmSync(tempPath, { recursive: true, force: true });
         await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
-        await runCommmand(
-            `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`
-        );
+        if (fileByFileMode) {
+            await copyFolderIObitMode(tempPath, path.join(versionFolder, "data"));
+        } else {
+            await runCommmand(
+                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`
+            );
+        }
     }
 }
 
