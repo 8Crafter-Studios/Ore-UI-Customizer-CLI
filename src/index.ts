@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.4.0" as const;
+export const format_version = "1.5.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -51,7 +51,12 @@ if (configPath !== undefined) {
  */
 const enableDebugLogging: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--debug");
 
-const sourceWebsite: string = new URL(flagsArgs.find((arg) => arg.toLowerCase().startsWith("--source-website"))?.slice("--source-website=".length).replace(/(?<!\/)$/, "/") || "https://www.8crafter.com/").href;
+const sourceWebsite: string = new URL(
+    flagsArgs
+        .find((arg) => arg.toLowerCase().startsWith("--source-website"))
+        ?.slice("--source-website=".length)
+        .replace(/(?<!\/)$/, "/") || "https://www.8crafter.com/"
+).href;
 
 /**
  * The mode of the script.
@@ -250,7 +255,8 @@ try {
         for (const [v, i] of versionNumbers.map((v, i) => [v, i] as const)) {
             bedrockLauncherVersionFolders[i] = versionNumberToFolderMap.get(v)!;
         }
-        process.stdout.write(`${chalk.yellowBright(
+        process.stdout.write(
+            `${chalk.yellowBright(
                 `Multiple Minecraft versions were found, please enter the number of the Minecraft version to ${
                     mode === "install"
                         ? "install 8Crafter's Ore UI Customizer on"
@@ -258,7 +264,8 @@ try {
                         ? "uninstall 8Crafter's Ore UI Customizer from"
                         : "export the config of 8Crafter's Ore UI Customizer from"
                 }:`
-            )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\n`)
+            )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\n`
+        );
         /**
          * Prompt the user to select a Minecraft version.
          */
@@ -482,7 +489,7 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
             );
             rmSync(tempPath, { recursive: true, force: true });
             copyFolder(path.join(versionFolder, "data/gui"), tempPath);
-            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${tempPath}" "${path.join(versionFolder, "data")}"`);
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`);
         }
         addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui"));
     }
@@ -541,7 +548,7 @@ export async function uninstallOreUICustomizer(versionFolder: string): Promise<v
             copyFolder(path.join(versionFolder, "data/gui_vanilla_backup"), path.join(versionFolder, "data/gui"));
             rmSync(path.join(versionFolder, "data/gui_vanilla_backup"), { recursive: true, force: true });
         } else if (accessType === "IObit Unlocker") {
-            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete /Advanced "${path.join(versionFolder, "data/gui")}"`);
             await runCommmand(
                 `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Rename "${path.join(versionFolder, "data/gui_vanilla_backup")}" "gui"`
             );
@@ -594,7 +601,7 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
         if (accessType === "BedrockLauncher") {
             rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
         } else if (accessType === "IObit Unlocker") {
-            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete /Advanced "${path.join(versionFolder, "data/gui")}"`);
         }
     } catch {}
     if (accessType === "BedrockLauncher") {
@@ -606,7 +613,7 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
         const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
         rmSync(tempPath, { recursive: true, force: true });
         await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
-        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${tempPath}" "${path.join(versionFolder, "data")}"`);
+        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`);
     }
 }
 
@@ -929,6 +936,26 @@ switch (mode) {
                 "Cannot use IObit Unlocker, IObit Unlocker is not installed. You must have either Bedrock Launcher or IObit Unlocker installed to use this CLI."
             );
         }
+        const oreUICustomizerAppDataPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer");
+        try {
+            mkdirSync(path.join(oreUICustomizerAppDataPath, path.basename(versionFolder)), { recursive: true });
+        } catch (e) {}
+        try {
+            writeFileSync(
+                path.join(oreUICustomizerAppDataPath, path.basename(versionFolder), "lastOreUICustomizerVersionUsed.json"),
+                JSON.stringify(
+                    {
+                        customizerVersion: oreUICustomizerAPI.format_version,
+                        cliVersion: format_version,
+                    },
+                    null,
+                    4
+                )
+            );
+        } catch (e) {}
+        try {
+            writeFileSync(path.join(oreUICustomizerAppDataPath, "VERSION.TXT"), format_version);
+        } catch (e) {}
         /**
          * The loading bar instance.
          */
