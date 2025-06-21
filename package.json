@@ -43,5 +43,6 @@
     },
     "os": [
         "win32"
-    ]
+    ],
+    "preferGlobal": true
 }

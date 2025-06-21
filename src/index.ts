@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.2.0" as const;
+export const format_version = "1.3.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -51,6 +51,8 @@ if (configPath !== undefined) {
  */
 const enableDebugLogging: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--debug");
 
+const sourceWebsite: string = new URL(flagsArgs.find((arg) => arg.toLowerCase().startsWith("--source-website"))?.slice("--source-website=".length).replace(/(?<!\/)$/, "/") || "https://www.8crafter.com/").href;
+
 /**
  * The mode of the script.
  */
@@ -75,7 +77,7 @@ if (mode === "uninstall" && (await checkIfProcessIsRunning("Minecraft.Windows.ex
  * @returns {Promise<string>} A promise resolving with the data URI to use to import the 8Crafter's Ore UI Customizer API.
  */
 async function getOreUICustomizerAPIDataURI(): Promise<string> {
-    const baseURL = "https://www.8crafter.com/api/dependency_lists/";
+    const baseURL = new URL("./api/dependency_lists/", sourceWebsite).href;
     const dependenciesData: {
         main_script: {
             js: string;
@@ -585,7 +587,7 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
             if (item instanceof zip.fs.ZipFileEntry) {
                 writeFileSync(path.resolve(basePath, destinationFolder, item.name), await (await item.getBlob()).bytes());
             } else if (item instanceof zip.fs.ZipDirectoryEntry) {
-                addFolderContentsReversed(item, basePath, path.join(destinationFolder, item.name));
+                await addFolderContentsReversed(item, basePath, path.join(destinationFolder, item.name));
             }
         }
     }
@@ -949,7 +951,7 @@ switch (mode) {
          * The zip folder blob with the modded GUI folder.
          */
         const moddedZipData: ApplyModsResult = await oreUICustomizerAPI.applyMods(originalZipData, {
-            baseURI: "https://www.8crafter.com/",
+            baseURI: sourceWebsite,
             enableDebugLogging,
             nodeFS: undefined,
             settings: configData,
