@@ -4,7 +4,7 @@ import { type ExecException } from "child_process";
 /**
  * The version of the script.
  */
-export declare const format_version: "1.7.0";
+export declare const format_version: "1.7.1";
 /**
  * API for 8Crafter's Ore UI Customizer.
  *

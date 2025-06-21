@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.7.0" as const;
+export const format_version = "1.7.1" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -480,7 +480,10 @@ export async function copyFolderIObitMode(folder: string, destination: string): 
         }
     }
     if (listOfFilesToCopy.length === 0) return;
-    await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${listOfFilesToCopy.join('","')}" "${destination}"`);
+    const chunkSize = 50;
+    for (let i = 0; i < listOfFilesToCopy.length; i += chunkSize) {
+        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${listOfFilesToCopy.slice(i, Math.min(i + chunkSize, listOfFilesToCopy.length)).join('","')}" "${destination}"`);
+    }
 }
 
 /**
