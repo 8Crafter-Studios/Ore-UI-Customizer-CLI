@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.3.1" as const;
+export const format_version = "1.4.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -480,9 +480,9 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
                 "data",
                 "gui_vanilla_backup"
             );
+            rmSync(tempPath, { recursive: true, force: true });
             copyFolder(path.join(versionFolder, "data/gui"), tempPath);
             await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${tempPath}" "${path.join(versionFolder, "data")}"`);
-            rmSync(tempPath, { recursive: true, force: true });
         }
         addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui"));
     }
@@ -604,8 +604,9 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
          * The path to the temp folder to use to apply the zip.
          */
         const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
+        rmSync(tempPath, { recursive: true, force: true });
         await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
-        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Move "${tempPath}" "${path.join(versionFolder, "data")}"`);
+        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${tempPath}" "${path.join(versionFolder, "data")}"`);
     }
 }
 
@@ -933,6 +934,11 @@ switch (mode) {
          */
         const loadingBar: RGBLoadingBar = new RGBLoadingBar();
 
+        console.log(chalk.bgBlack(chalk.rgb(255, 0, 175)("Generating zip, this may take a while.")));
+
+        loadingBar.startLoadingBar();
+        await loadingBar.waitUntilLoadingBarIsStarted();
+
         /**
          * The zip folder blob with the original GUI folder.
          */
@@ -940,6 +946,11 @@ switch (mode) {
             versionFolder,
             accessType
         );
+
+        await loadingBar.stopLoadingBar();
+
+        process.stdout.moveCursor(0, -1);
+        process.stdout.clearLine(1);
 
         console.log(chalk.bgBlack(chalk.rgb(255, 0, 175)("Applying mods, this may take a while.")));
 
