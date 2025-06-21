@@ -39,6 +39,4 @@ Options:
   -ec, --exportconfig                   Export the configuration file.
   --debug                               Enable debug logging.
   --source-website=<URI>                Makes the CLI use a custom source website instead of https://www.8crafter.com/, this is used for development if you have a locally running instance of the website, then you can use the localhost IP for it.
-  --use-app-data-backup-folder          Makes the CLI search for gui_vanilla_backup folders in its app data folder instead of the version folder, only applies if you are using IObit Unlocker.
-  --file-by-file-mode                   Makes the CLI copy the individual files instead of the folder when using IObit Unlocker. This can fix issues with IObit Unlocker not copying all of the files.
 ```

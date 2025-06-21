@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.7.1" as const;
+export const format_version = "1.8.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -57,10 +57,6 @@ const sourceWebsite: string = new URL(
         ?.slice("--source-website=".length)
         .replace(/(?<!\/)$/, "/") || "https://www.8crafter.com/"
 ).href;
-
-const useBackupFolderFromAppData: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--use-app-data-backup-folder");
-
-const fileByFileMode: boolean = flagsArgs.some((arg) => arg.toLowerCase() === "--file-by-file-mode");
 
 /**
  * The mode of the script.
@@ -455,13 +451,13 @@ export function copyFolder(folder: string, destination: string): void {
 }
 
 /**
- * Copies a folder using IObit Unlocker.
+ * Copies a folder using IObit Unlocker per file.
  *
  * @param {string} folder The folder to copy.
  * @param {string} destination The destination folder.
  * @returns {Promise<void>} A promise that resolves when the folder is copied.
  */
-export async function copyFolderIObitMode(folder: string, destination: string): Promise<void> {
+export async function copyFolderIObitPerFileMode(folder: string, destination: string): Promise<void> {
     try {
         mkdirSync(destination, { recursive: true });
     } catch (e) {}
@@ -476,13 +472,102 @@ export async function copyFolderIObitMode(folder: string, destination: string): 
             } catch (e: any) {
                 console.error(e, e?.stack);
             } */
-            await copyFolderIObitMode(path.join(folder, item.name), path.join(destination, item.name));
+            await copyFolderIObitPerFileMode(path.join(folder, item.name), path.join(destination, path.basename(folder)));
         }
     }
     if (listOfFilesToCopy.length === 0) return;
     const chunkSize = 50;
     for (let i = 0; i < listOfFilesToCopy.length; i += chunkSize) {
-        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${listOfFilesToCopy.slice(i, Math.min(i + chunkSize, listOfFilesToCopy.length)).join('","')}" "${destination}"`);
+        // console.log(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${listOfFilesToCopy.slice(i, Math.min(i + chunkSize, listOfFilesToCopy.length)).join('","')}" "${destination}"`);
+        await runCommmand(
+            `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${listOfFilesToCopy
+                .slice(i, Math.min(i + chunkSize, listOfFilesToCopy.length))
+                .join('","')}" "${path.join(destination, path.basename(folder))}"`
+        );
+    }
+}
+
+/**
+ * Generates a super unique ID.
+ *
+ * @returns {`${number}_${number}_${number}`} The super unique ID.
+ *
+ * @author 8Crafter
+ *
+ * @remarks Note: This function is from 8Crafter's Server Utilities & Debug Sticks add-on for Minecraft Bedrock Edition.
+ */
+export function getSuperUniqueID(): `${number}_${number}_${number}` {
+    return `${Date.now()}_${Math.round(Math.random() * 100000)}_${Math.round(Math.random() * 100000)}` as const;
+}
+
+/**
+ * The path to the temp folder of the app data folder for 8Crafter's Ore UI Customizer.
+ */
+export const oreUICustomizerAppDataTempPath: string = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", "temp");
+
+/**
+ * Checks if a folder only has nested empty folders.
+ *
+ * @param {string} folder The folder to check.
+ * @returns {boolean} `true` if the folder only has nested empty folders, `false` otherwise.
+ */
+export function checkFolderOnlyHasNestedEmptyFolders(folder: string): boolean {
+    const folderContents = readdirSync(folder, { withFileTypes: true });
+    return (
+        folderContents.length === 0 || folderContents.every((item) => item.isDirectory() && checkFolderOnlyHasNestedEmptyFolders(path.join(folder, item.name)))
+    );
+}
+
+/**
+ * Copies a folder using IObit Unlocker per folder.
+ *
+ * @param {string} folder The folder to copy.
+ * @param {string} destination The destination folder.
+ * @returns {Promise<void>} A promise that resolves when the folder is copied.
+ */
+export async function copyFolderIObitPerFolderMode(folder: string, destination: string): Promise<void> {
+    const folderContents = readdirSync(folder, { withFileTypes: true });
+    // console.log(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${folder}" "${destination}"\n`);
+    if (
+        folderContents.some((item) => item.isFile()) ||
+        ((folderContents.length === 0 || checkFolderOnlyHasNestedEmptyFolders(folder)) && !existsSync(path.join(destination, path.basename(folder))))
+    ) {
+        if (!existsSync(destination)) {
+            const tempID: `${number}_${number}_${number}` = getSuperUniqueID();
+            const destinationSegments: string[] = destination.split(path.sep);
+            for (let i = 0; i < destinationSegments.length; i++) {
+                if (existsSync(destinationSegments.slice(0, i + 1).join(path.sep))) continue;
+                mkdirSync(path.join(oreUICustomizerAppDataTempPath, "IObitUnlockerFolderCreation", tempID, destinationSegments.slice(i).join(path.sep)), {
+                    recursive: true,
+                });
+                await runCommmand(
+                    `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${path.join(
+                        oreUICustomizerAppDataTempPath,
+                        "IObitUnlockerFolderCreation",
+                        tempID,
+                        destinationSegments[i]!
+                    )}" "${destinationSegments.slice(0, i).join(path.sep)}"`
+                ).then((r) => {
+                    if (r.err !== null) {
+                        throw r.err;
+                    }
+                });
+                rmSync(path.join(oreUICustomizerAppDataTempPath, "IObitUnlockerFolderCreation", tempID, destinationSegments[i]!), {
+                    recursive: true,
+                    force: true,
+                });
+                break;
+            }
+            rmSync(path.join(oreUICustomizerAppDataTempPath, "IObitUnlockerFolderCreation", tempID), { recursive: true, force: true });
+        }
+        await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${folder}" "${destination}"`).then((r) => {
+            if (r.err !== null) {
+                throw r.err;
+            }
+        });
+    }
+    for (const item of folderContents.filter((item) => item.isDirectory())) {
+        await copyFolderIObitPerFolderMode(path.join(folder, item.name), path.join(destination, path.basename(folder)));
     }
 }
 
@@ -506,9 +591,9 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
         }
     }
     /**
-     * The path to the temp folder to use to apply the zip.
+     * The path to the vanilla gui backup folder for the provided version folder.
      */
-    const tempPath = path.join(
+    const vanillaBackupPath = path.join(
         userFolderPath,
         "AppData",
         "Roaming",
@@ -517,33 +602,14 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
         "data",
         "gui_vanilla_backup"
     );
-    if (useBackupFolderFromAppData && existsSync(tempPath)) {
-        addFolderContents(zipFs.addDirectory("gui"), tempPath);
+    if (existsSync(vanillaBackupPath)) {
+        addFolderContents(zipFs.addDirectory("gui"), vanillaBackupPath);
     } else if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
-        addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui_vanilla_backup"));
+        copyFolder(path.join(versionFolder, "data/gui_vanilla_backup"), vanillaBackupPath);
+        addFolderContents(zipFs.addDirectory("gui"), vanillaBackupPath);
     } else {
-        if (accessMode === "BedrockLauncher") {
-            copyFolder(path.join(versionFolder, "data/gui"), path.join(versionFolder, "data/gui_vanilla_backup"));
-        } else if (accessMode === "IObit Unlocker") {
-            /**
-             * The path to the temp folder to use to apply the zip.
-             */
-            const tempPath = path.join(
-                userFolderPath,
-                "AppData",
-                "Roaming",
-                "8Crafter's Ore UI Customizer",
-                path.basename(versionFolder),
-                "data",
-                "gui_vanilla_backup"
-            );
-            rmSync(tempPath, { recursive: true, force: true });
-            copyFolder(path.join(versionFolder, "data/gui"), tempPath);
-            await runCommmand(
-                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`
-            );
-        }
-        addFolderContents(zipFs.addDirectory("gui"), path.join(versionFolder, "data/gui"));
+        copyFolder(path.join(versionFolder, "data/gui"), vanillaBackupPath);
+        addFolderContents(zipFs.addDirectory("gui"), vanillaBackupPath);
     }
 
     return await zipFs.exportBlob();
@@ -594,17 +660,56 @@ export async function readJSCustomizerConfigFile(filePath: string): Promise<{
  * @returns {Promise<void>} A promise that resolves when the uninstallation is complete.
  */
 export async function uninstallOreUICustomizer(versionFolder: string): Promise<void> {
-    if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
+    /**
+     * The path to the vanilla gui backup folder for the provided version folder.
+     */
+    const vanillaBackupPath = path.join(
+        userFolderPath,
+        "AppData",
+        "Roaming",
+        "8Crafter's Ore UI Customizer",
+        path.basename(versionFolder),
+        "data",
+        "gui_vanilla_backup"
+    );
+    if (existsSync(vanillaBackupPath)) {
+        if (accessType === "BedrockLauncher") {
+            rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
+            copyFolder(vanillaBackupPath, path.join(versionFolder, "data/gui"));
+            rmSync(path.join(versionFolder, "data/gui_vanilla_backup"), { recursive: true, force: true });
+        } else if (accessType === "IObit Unlocker") {
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
+            await runCommmand(
+                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui_vanilla_backup")}"`
+            );
+            await copyFolderIObitPerFolderMode(vanillaBackupPath, path.join(versionFolder, "data"));
+            await runCommmand(
+                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Rename "${path.join(versionFolder, "data/gui_vanilla_backup")}" "gui"`
+            ).then((r) => {
+                if (r.err !== null) {
+                    throw r.err;
+                }
+            });
+        }
+        rmSync(vanillaBackupPath, { recursive: true, force: true });
+        rmSync(path.join(vanillaBackupPath, "../gui"), { recursive: true, force: true });
+    } else if (existsSync(path.join(versionFolder, "data/gui_vanilla_backup"))) {
         if (accessType === "BedrockLauncher") {
             rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
             copyFolder(path.join(versionFolder, "data/gui_vanilla_backup"), path.join(versionFolder, "data/gui"));
             rmSync(path.join(versionFolder, "data/gui_vanilla_backup"), { recursive: true, force: true });
         } else if (accessType === "IObit Unlocker") {
-            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete /Advanced "${path.join(versionFolder, "data/gui")}"`);
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
             await runCommmand(
                 `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Rename "${path.join(versionFolder, "data/gui_vanilla_backup")}" "gui"`
-            );
+            ).then((r) => {
+                if (r.err !== null) {
+                    throw r.err;
+                }
+            });
         }
+        rmSync(vanillaBackupPath, { recursive: true, force: true });
+        rmSync(path.join(vanillaBackupPath, "../gui"), { recursive: true, force: true });
     } else {
         if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
             throw new ReferenceError(
@@ -653,11 +758,18 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
         if (accessType === "BedrockLauncher") {
             rmSync(path.join(versionFolder, "data/gui"), { recursive: true, force: true });
         } else if (accessType === "IObit Unlocker") {
-            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete /Advanced "${path.join(versionFolder, "data/gui")}"`);
+            await runCommmand(`C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Delete "${path.join(versionFolder, "data/gui")}"`);
         }
     } catch {}
     if (accessType === "BedrockLauncher") {
         await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, path.join(versionFolder, "data/gui"));
+        // /**
+        //  * The path to the temp folder to use to apply the zip.
+        //  */
+        // const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
+        // rmSync(tempPath, { recursive: true, force: true });
+        // await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
+        // await copyFolderIObitPerFolderMode(tempPath, path.join(versionFolder, "datab"));
     } else if (accessType === "IObit Unlocker") {
         /**
          * The path to the temp folder to use to apply the zip.
@@ -665,13 +777,13 @@ export async function applyModdedZip(moddedZip: Blob, versionFolder: string): Pr
         const tempPath = path.join(userFolderPath, "AppData", "Roaming", "8Crafter's Ore UI Customizer", path.basename(versionFolder), "data", "gui");
         rmSync(tempPath, { recursive: true, force: true });
         await addFolderContentsReversed(zipFs.getChildByName("gui") as zip.ZipDirectoryEntry, tempPath);
-        if (fileByFileMode) {
-            await copyFolderIObitMode(tempPath, path.join(versionFolder, "data"));
+        await copyFolderIObitPerFolderMode(tempPath, path.join(versionFolder, "data"));
+        /* if (fileByFileMode) {
         } else {
             await runCommmand(
-                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy /Advanced "${tempPath}" "${path.join(versionFolder, "data")}"`
+                `C:/"Program Files (x86)/IObit/IObit Unlocker/IObitUnlocker.exe" /Copy "${tempPath}" "${path.join(versionFolder, "data")}"`
             );
-        }
+        } */
     }
 }
 

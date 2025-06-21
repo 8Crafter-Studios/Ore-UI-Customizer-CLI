@@ -4,7 +4,7 @@ import { type ExecException } from "child_process";
 /**
  * The version of the script.
  */
-export declare const format_version: "1.7.1";
+export declare const format_version: "1.8.0";
 /**
  * API for 8Crafter's Ore UI Customizer.
  *
@@ -35,13 +35,42 @@ declare let accessType: "BedrockLauncher" | "IObit Unlocker";
  */
 export declare function copyFolder(folder: string, destination: string): void;
 /**
- * Copies a folder using IObit Unlocker.
+ * Copies a folder using IObit Unlocker per file.
  *
  * @param {string} folder The folder to copy.
  * @param {string} destination The destination folder.
  * @returns {Promise<void>} A promise that resolves when the folder is copied.
  */
-export declare function copyFolderIObitMode(folder: string, destination: string): Promise<void>;
+export declare function copyFolderIObitPerFileMode(folder: string, destination: string): Promise<void>;
+/**
+ * Generates a super unique ID.
+ *
+ * @returns {`${number}_${number}_${number}`} The super unique ID.
+ *
+ * @author 8Crafter
+ *
+ * @remarks Note: This function is from 8Crafter's Server Utilities & Debug Sticks add-on for Minecraft Bedrock Edition.
+ */
+export declare function getSuperUniqueID(): `${number}_${number}_${number}`;
+/**
+ * The path to the temp folder of the app data folder for 8Crafter's Ore UI Customizer.
+ */
+export declare const oreUICustomizerAppDataTempPath: string;
+/**
+ * Checks if a folder only has nested empty folders.
+ *
+ * @param {string} folder The folder to check.
+ * @returns {boolean} `true` if the folder only has nested empty folders, `false` otherwise.
+ */
+export declare function checkFolderOnlyHasNestedEmptyFolders(folder: string): boolean;
+/**
+ * Copies a folder using IObit Unlocker per folder.
+ *
+ * @param {string} folder The folder to copy.
+ * @param {string} destination The destination folder.
+ * @returns {Promise<void>} A promise that resolves when the folder is copied.
+ */
+export declare function copyFolderIObitPerFolderMode(folder: string, destination: string): Promise<void>;
 /**
  * Get the zip file of the version's GUI folder.
  *
