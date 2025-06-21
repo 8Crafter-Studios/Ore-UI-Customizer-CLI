@@ -13,7 +13,7 @@ import progress from "progress";
 /**
  * The version of the script.
  */
-export const format_version = "1.3.0" as const;
+export const format_version = "1.3.1" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -250,11 +250,7 @@ try {
         for (const [v, i] of versionNumbers.map((v, i) => [v, i] as const)) {
             bedrockLauncherVersionFolders[i] = versionNumberToFolderMap.get(v)!;
         }
-        /**
-         * Prompt the user to select a Minecraft version.
-         */
-        let folderSelection: string = prompt({
-            ask: `${chalk.yellowBright(
+        process.stdout.write(`${chalk.yellowBright(
                 `Multiple Minecraft versions were found, please enter the number of the Minecraft version to ${
                     mode === "install"
                         ? "install 8Crafter's Ore UI Customizer on"
@@ -262,8 +258,11 @@ try {
                         ? "uninstall 8Crafter's Ore UI Customizer from"
                         : "export the config of 8Crafter's Ore UI Customizer from"
                 }:`
-            )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\nSelection: `,
-        });
+            )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\n`)
+        /**
+         * Prompt the user to select a Minecraft version.
+         */
+        let folderSelection: string = prompt("Selection: ");
         folderSelection = folderSelection.trim();
         // If the user entered an invalid folder selection, log an error to the console and exit.
         if (!Number(folderSelection) || Number(folderSelection) < 1 || Number(folderSelection) > versionNumbers.length) {
