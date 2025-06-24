@@ -1,10 +1,10 @@
 import "./zip.js";
-import type { OreUICustomizerSettings } from "OreUICustomizerAssets";
+import type { OreUICustomizerConfig } from "OreUICustomizerAssets";
 import { type ExecException } from "child_process";
 /**
  * The version of the script.
  */
-export declare const format_version: "1.8.0";
+export declare const format_version: "1.9.0";
 /**
  * API for 8Crafter's Ore UI Customizer.
  *
@@ -83,22 +83,16 @@ export declare function getZip(versionFolder: string, accessMode: typeof accessT
  * Get the config data for 8Crafter's Ore UI Customizer from the specified version folder.
  *
  * @param {string} versionFolder The path to the version folder.
- * @returns A promise that resolves with the config data, or `undefined` if the config file is not found.
+ * @returns {Promise<OreUICustomizerConfig | undefined>} A promise that resolves with the config data, or `undefined` if the config file is not found.
  */
-export declare function getCurrentCustomizerConfigurationAndVersion(versionFolder: string): Promise<{
-    oreUICustomizerConfig: OreUICustomizerSettings;
-    oreUICustomizerVersion: string;
-} | undefined>;
+export declare function getCurrentCustomizerConfigurationAndVersion(versionFolder: string): Promise<OreUICustomizerConfig | undefined>;
 /**
  * Read a JavaScript config file for 8Crafter's Ore UI Customizer.
  *
  * @param {string} filePath The path to the config file.
- * @returns A promise that resolves with the config data.
+ * @returns {Promise<OreUICustomizerConfig>} A promise that resolves with the config data.
  */
-export declare function readJSCustomizerConfigFile(filePath: string): Promise<{
-    oreUICustomizerConfig: OreUICustomizerSettings;
-    oreUICustomizerVersion: string;
-}>;
+export declare function readJSCustomizerConfigFile(filePath: string): Promise<OreUICustomizerConfig>;
 /**
  * Uninstall 8Crafter's Ore UI Customizer from a version.
  *

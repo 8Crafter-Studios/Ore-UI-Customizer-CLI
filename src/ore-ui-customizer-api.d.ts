@@ -8,7 +8,10 @@
 declare module "OreUICustomizerAPI" {
     import { OreUICustomizerSettings } from "OreUICustomizerAssets";
     // import "./zip.js";
-    export const format_version = "0.23.0";
+    /**
+     * The version of the Ore UI Customizer API.
+     */
+    export const format_version = "1.0.0";
     /**
      * The result of the {@link applyMods} function.
      */
@@ -89,10 +92,23 @@ declare module "OreUICustomizerAPI" {
         nodeFS?: typeof import("fs");
     }
     /**
+     * Resolves the settings for the {@link applyMods} function, adding in the default values in place of the missing settigns.
+     *
+     * @param settings The settings to resolve.
+     * @returns The resolved settings.
+     */
+    export function resolveOreUICustomizerSettings(settings?: {
+        [key in keyof OreUICustomizerSettings]?: key extends "colorReplacements"
+            ? Partial<OreUICustomizerSettings["colorReplacements"]>
+            : key extends "enabledBuiltInPlugins"
+            ? Partial<OreUICustomizerSettings["enabledBuiltInPlugins"]>
+            : OreUICustomizerSettings[key];
+    }): OreUICustomizerSettings;
+    /**
      * Applies mods to a zip file.
      *
      * @param {Blob} file The zip file to apply mods to.
-     * @param options The options.
+     * @param {ApplyModsOptions} options The options.
      * @returns {Promise<ApplyModsResult>} A promise resolving to the result.
      */
     export function applyMods(file: Blob, options?: ApplyModsOptions): Promise<ApplyModsResult>;

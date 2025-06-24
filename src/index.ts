@@ -1,19 +1,19 @@
-import { copyFileSync, existsSync, mkdirSync, read, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import path from "path";
 import promptSync from "prompt-sync";
 import chalk from "chalk";
 import semver from "semver";
 import "./zip.js";
 import type { ApplyModsResult } from "OreUICustomizerAPI";
-import type { OreUICustomizerSettings } from "OreUICustomizerAssets";
+import type { OreUICustomizerConfig, OreUICustomizerSettings } from "OreUICustomizerAssets";
 import { exec, type ExecException } from "child_process";
 import * as CommentJSON from "comment-json";
-import progress from "progress";
+// import progress from "progress";
 
 /**
  * The version of the script.
  */
-export const format_version = "1.8.0" as const;
+export const format_version = "1.9.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -83,22 +83,35 @@ if (mode === "uninstall" && (await checkIfProcessIsRunning("Minecraft.Windows.ex
  */
 async function getOreUICustomizerAPIDataURI(): Promise<string> {
     const baseURL = new URL("./api/dependency_lists/", sourceWebsite).href;
-    const dependenciesData: {
+    interface DependenciesData {
         main_script: {
             js: string;
             dts?: string;
             ts?: string;
         };
-        dependencies: { js: string; dts?: string; ts?: string; currentImportStatementText: string }[];
-    } = (await (await fetch(new URL("ore-ui-customizer-api.dependencies.json", baseURL).href)).json()) as any;
+        dependencies: DependenciesDataDependency[];
+    }
+    interface DependenciesDataDependency {
+        js: string;
+        dts?: string;
+        ts?: string;
+        currentImportStatementText: string;
+        dependencies?: DependenciesDataDependency[];
+    }
+    const dependenciesData: DependenciesData = (await (await fetch(new URL("ore-ui-customizer-api.dependencies.json", baseURL).href)).json()) as any;
     let scriptData: string = /* readFileSync(
         path.join(import.meta.dirname, "./ore-ui-customizer-api.js")
     ).toString(); */ await (await fetch(new URL(dependenciesData.main_script.js, baseURL).href)).text();
-    for (const dependency of dependenciesData.dependencies) {
-        const dependencyScriptData: string = await (await fetch(new URL(dependency.js, baseURL).href)).text();
-        const dependencyScriptDataURI: string = `data:text/javascript;base64,${Buffer.from(dependencyScriptData).toString("base64")}`;
-        scriptData = scriptData.replaceAll(dependency.currentImportStatementText, dependencyScriptDataURI);
+    async function applyDependencies(dependencies: DependenciesDataDependency[], targetString: string): Promise<string> {
+        for (const dependency of dependencies) {
+            let dependencyScriptData: string = await (await fetch(new URL(dependency.js, baseURL).href)).text();
+            dependency.dependencies && (dependencyScriptData = await applyDependencies(dependency.dependencies, dependencyScriptData));
+            const dependencyScriptDataURI: string = `data:text/javascript;base64,${Buffer.from(dependencyScriptData).toString("base64")}`;
+            targetString = targetString.replaceAll(dependency.currentImportStatementText, dependencyScriptDataURI);
+        }
+        return targetString;
     }
+    scriptData = await applyDependencies(dependenciesData.dependencies, scriptData);
     const scriptDataURI: string = `data:text/javascript;base64,${Buffer.from(scriptData).toString("base64")}`;
     return scriptDataURI;
 }
@@ -150,9 +163,9 @@ let configData: OreUICustomizerSettings | undefined = undefined;
 let configDataVersion: string | undefined = undefined;
 if (configPath) {
     if (path.extname(configPath) === ".json") {
-        const data = CommentJSON.parse(readFileSync(configPath).toString()) as any;
-        configData = data;
-        configDataVersion = data.format_version;
+        const data: OreUICustomizerConfig = CommentJSON.parse(readFileSync(configPath).toString()) as any;
+        configData = data.oreUICustomizerConfig;
+        configDataVersion = data.oreUICustomizerVersion;
     } else if (path.extname(configPath) === ".js") {
         const data = await readJSCustomizerConfigFile(configPath);
         configData = data?.oreUICustomizerConfig;
@@ -619,15 +632,9 @@ export async function getZip(versionFolder: string, accessMode: typeof accessTyp
  * Get the config data for 8Crafter's Ore UI Customizer from the specified version folder.
  *
  * @param {string} versionFolder The path to the version folder.
- * @returns A promise that resolves with the config data, or `undefined` if the config file is not found.
+ * @returns {Promise<OreUICustomizerConfig | undefined>} A promise that resolves with the config data, or `undefined` if the config file is not found.
  */
-export async function getCurrentCustomizerConfigurationAndVersion(versionFolder: string): Promise<
-    | {
-          oreUICustomizerConfig: OreUICustomizerSettings;
-          oreUICustomizerVersion: string;
-      }
-    | undefined
-> {
+export async function getCurrentCustomizerConfigurationAndVersion(versionFolder: string): Promise<OreUICustomizerConfig | undefined> {
     if (!existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
         return undefined;
     }
@@ -638,12 +645,9 @@ export async function getCurrentCustomizerConfigurationAndVersion(versionFolder:
  * Read a JavaScript config file for 8Crafter's Ore UI Customizer.
  *
  * @param {string} filePath The path to the config file.
- * @returns A promise that resolves with the config data.
+ * @returns {Promise<OreUICustomizerConfig>} A promise that resolves with the config data.
  */
-export async function readJSCustomizerConfigFile(filePath: string): Promise<{
-    oreUICustomizerConfig: OreUICustomizerSettings;
-    oreUICustomizerVersion: string;
-}> {
+export async function readJSCustomizerConfigFile(filePath: string): Promise<OreUICustomizerConfig> {
     const configFile: {
         oreUICustomizerConfig: OreUICustomizerSettings;
         oreUICustomizerVersion: string;
@@ -1215,7 +1219,7 @@ switch (mode) {
     }
     case "exportConfig": {
         const exportLocation = prompt("Please enter the path to export the config to: ");
-        writeFileSync(exportLocation, CommentJSON.stringify({ ...configData, format_version: configDataVersion }, null, 4));
+        writeFileSync(exportLocation, CommentJSON.stringify({ oreUICustomizerConfig: configData, oreUICustomizerVersion: configDataVersion } as OreUICustomizerConfig, null, 4));
         break;
     }
 }

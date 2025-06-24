@@ -79,7 +79,18 @@ declare module "OreUICustomizerAssets" {
          * @type {boolean}
          */
         addDebugTab: boolean;
+        /**
+         * This adds a button in the top right of the screen on the title bar to get access to the 8Crafter Utilities menu, this allows you to access certain menus without a keyboard shortcut, and has information and the auto rejoiner menu.
+         *
+         * @type {boolean}
+         */
         add8CrafterUtilitiesMainMenuButton: boolean;
+        /**
+         * An object that lists whether or not each built in plugin is enabled.
+         *
+         * @type {Record<typeof builtInPlugins[number]["id"], boolean>}
+         */
+        enabledBuiltInPlugins: Record<(typeof builtInPlugins)[number]["id"], boolean>;
         /**
          * These are replacements for the UI colors.
          *
@@ -168,33 +179,186 @@ declare module "OreUICustomizerAssets" {
             "#050029": string;
             "rgba(5, 0, 41, 0.5)": string;
         };
+        /**
+         * A list of additional plugins to apply.
+         *
+         * @default []
+         */
+        plugins?: EncodedPluginData[];
+    }
+    export interface EncodedPluginData {
+        /**
+         * The display name of the plugin.
+         */
+        name: string;
+        /**
+         * The id of the plugin, used to identify the plugin when applying the plugins, also used to identify the plugin in error messages, this should be unique.
+         *
+         * Must consist only of alphanumeric characters, underscores, hyphens, and periods.
+         */
+        id: string;
+        /**
+         * The namespace of the plugin, used to identify the plugin in error messages.
+         *
+         * Must consist only of alphanumeric characters, underscores, hyphens, and periods.
+         *
+         * Must not be `built-in`, as it is reserved for built-in plugins.
+         */
+        namespace: string;
+        /**
+         * The version of the plugin.
+         *
+         * This must be a valid semver string, without the leading `v`.
+         */
+        version: string;
+        /**
+         * The version of 8Crafter's Ore UI Customizer that this plugin is made for.
+         *
+         * This must be a valid semver string, without the leading `v`.
+         */
+        format_version: string;
+        /**
+         * The minimum version of 8Crafter's Ore UI Customizer that this plugin is compatible with.
+         *
+         * This must be a valid semver string, without the leading `v`.
+         *
+         * If not specified, no check will be done.
+         */
+        min_engine_version?: string;
+        /**
+         * The file type of the plugin.
+         */
+        fileType: "js" | "mcouicplugin";
+        /**
+         * The data URI of the plugin.
+         */
+        dataURI: `data:${string};base64,${string}`;
+    }
+    /**
+     * The JSON data of a config file for 8Crafter's Ore UI Customizer.
+     */
+    export interface OreUICustomizerConfig {
+        /**
+         * The settings for 8Crafter's Ore UI Customizer.
+         */
+        oreUICustomizerConfig: OreUICustomizerSettings;
+        /**
+         * The version of 8Crafter's Ore UI Customizer.
+         */
+        oreUICustomizerVersion: string;
     }
     /**
      * The default settings for 8Crafter's Ore UI Customizer.
      */
     export const defaultOreUICustomizerSettings: OreUICustomizerSettings;
     /**
-     * Extracts the function names from the given file contents for the Ore UI Customizer.
+     * Converts a blob to a data URI.
+     *
+     * @param {Blob} blob The blob to convert.
+     * @returns {Promise<`data:${string};base64,${string}`>} A promise resolving with the data URI.
+     */
+    export function blobToDataURI(blob: Blob): Promise<`data:${string};base64,${string}`>;
+    /**
+     * Imports a plugin from a data URI.
+     *
+     * @param {string} dataURI The data URI to import the plugin from.
+     * @param {"js" | "mcouicplugin"} [type="js"] The type of the plugin to import.
+     * @returns {Promise<Plugin>} A promise resolving with the imported plugin.
+     *
+     * @throws {TypeError} If the plugin type is not supported.
+     */
+    export function importPluginFromDataURI(dataURI: string, type?: "js" | "mcouicplugin"): Promise<Plugin>;
+    /**
+     * Validates a plugin file.
+     *
+     * @param {Blob} plugin The plugin file to validate.
+     * @param {"mcouicplugin" | "js"} type The type of the plugin file.
+     * @returns {Promise<void>} A promise resolving to `void` when the plugin file is validated.
+     *
+     * @throws {TypeError} If the plugin type is not supported.
+     * @throws {TypeError | SyntaxError} If the plugin is not valid.
+     */
+    export function validatePluginFile(plugin: Blob, type: "mcouicplugin" | "js"): Promise<void>;
+    /**
+     * Validates a plugin object.
+     *
+     * @param {any} plugin The plugin object to validate.
+     * @returns {asserts plugin is Plugin} Asserts that the plugin object is valid. If it is not valid, throws an error. Otherwise, returns `void`.
+     */
+    export function validatePluginObject(plugin: any): asserts plugin is Plugin;
+    /**
+     * An interface that contains extracted symbol names from the compiled Ore UI react code.
+     */
+    export interface ExtractedSymbolNames {
+        /**
+         * The function name for the translation string resolver.
+         *
+         * @default "wi"
+         */
+        translationStringResolver: string;
+        /**
+         * The function name for the header function.
+         *
+         * @default "fu"
+         */
+        headerFunciton: string;
+        /**
+         * The function name for the header spacing function.
+         *
+         * @default "Gc"
+         */
+        headerSpacingFunction: string;
+        /**
+         * The function name for the edit world text function.
+         *
+         * @default "Dk"
+         */
+        editWorldTextFunction: string;
+        /**
+         * The function name for the JS text.
+         *
+         * @default "js"
+         */
+        jsText: string;
+        /**
+         * The function name for the navbar button function.
+         *
+         * @default "lc"
+         */
+        navbarButtonFunction: string;
+        /**
+         * The function name for the navbar button image function.
+         *
+         * @default "xc"
+         */
+        navbarButtonImageFunction: string;
+        /**
+         * The function name for the context holder.
+         *
+         * @default "a"
+         */
+        contextHolder: string;
+        /**
+         * The function name for the facet holder.
+         *
+         * @default "r"
+         */
+        facetHolder: string;
+    }
+    /**
+     * Extracts the symbol names from the given file contents for the Ore UI Customizer.
      *
      * @param {string} fileContents The file contents.
-     * @returns The extracted function names.
+     * @returns {ExtractedSymbolNames} The extracted symbol names.
      */
-    export function getExtractedFunctionNames(fileContents: string): {
-        translationStringResolver: string;
-        headerFunciton: string;
-        headerSpacingFunction: string;
-        editWorldTextFunction: string;
-        jsText: string;
-        navbarButtonFunction: string;
-        navbarButtonImageFunction: string;
-    };
+    export function getExtractedSymbolNames(fileContents: string): ExtractedSymbolNames;
     /**
      * Extracts the regexes for the replacer function for the Ore UI Customizer.
      *
-     * @param {ReturnType<typeof getExtractedFunctionNames>} extractedFunctionNames The extracted function names from the {@link getExtractedFunctionNames} function.
+     * @param {ReturnType<typeof getExtractedSymbolNames>} extractedSymbolNames The extracted function names from the {@link getExtractedSymbolNames} function.
      * @returns An object containing the regexes for the replacer function.
      */
-    export function getReplacerRegexes(extractedFunctionNames: ReturnType<typeof getExtractedFunctionNames>): {
+    export function getReplacerRegexes(extractedSymbolNames: ReturnType<typeof getExtractedSymbolNames>): {
         /**
          * Make the hardcore mode toggle always clickable.
          *
@@ -690,4 +854,187 @@ declare module "OreUICustomizerAssets" {
             readonly 0: readonly [RegExp];
         };
     };
+    /**
+     * A plugin for 8Crafter's Ore UI Customizer.
+     */
+    export interface Plugin {
+        /**
+         * The display name of the plugin.
+         */
+        name: string;
+        /**
+         * The id of the plugin, used to identify the plugin when applying the plugins, also used to identify the plugin in error messages, this should be unique.
+         *
+         * Must consist only of alphanumeric characters, underscores, hyphens, and periods.
+         */
+        id: string;
+        /**
+         * The namespace of the plugin, used to identify the plugin in error messages.
+         *
+         * Must consist only of alphanumeric characters, underscores, hyphens, and periods.
+         *
+         * Must not be `built-in`, as it is reserved for built-in plugins.
+         */
+        namespace: string;
+        /**
+         * The version of the plugin.
+         *
+         * This must be a valid semver string, without the leading `v`.
+         */
+        version: string;
+        /**
+         * The actions of the plugin.
+         */
+        actions: PluginAction[];
+        /**
+         * The version of 8Crafter's Ore UI Customizer that this plugin is made for.
+         *
+         * This must be a valid semver string, without the leading `v`.
+         */
+        format_version: string;
+        /**
+         * The minimum version of 8Crafter's Ore UI Customizer that this plugin is compatible with.
+         *
+         * This must be a valid semver string, without the leading `v`.
+         *
+         * If not specified, no check will be done.
+         */
+        min_engine_version?: string;
+    }
+    /**
+     * The context of a {@link PluginAction}.
+     */
+    export type PluginActionContext = "per_text_file" | "per_binary_file" | "global_before" | "global";
+    /**
+     * The base interface for an action for a {@link Plugin}.
+     */
+    export interface PluginActionBase {
+        /**
+         * The id of the plugin action, used to identify the plugin action in error messages, this should be unique.
+         *
+         * Must consist only of alphanumeric characters, underscores, hyphens, and periods.
+         */
+        id: string;
+        /**
+         * The context of the plugin action.
+         *
+         * - `per_text_file`: The plugin action is run once per file, with the file passed into the plugin action. This only targets files with text content. It currently targets the following file types: `.txt`, `.md`, `.js`, `.jsx`, `.html`, `.css`, `.json`, `.jsonc`, `.jsonl`.
+         * - `per_binary_file`: The plugin action is run once per file, with the file passed into the plugin action. This only targets files with non-text content. It currently targets all file types except for the following file types: `.txt`, `.md`, `.js`, `.jsx`, `.html`, `.css`, `.json`, `.jsonc`, `.jsonl`.
+         * - `global_before`: The plugin action is before the other plugin actions have been run, with the zip file system object passed into the plugin action.
+         * - `global`: The plugin action is run once all other plugin actions have been run, with the zip file system object passed into the plugin action.
+         */
+        context: PluginActionContext;
+        /**
+         * The action to run.
+         */
+        action: PluginAction["action"];
+    }
+    /**
+     * An action for a {@link Plugin} with a context of `per_text_file`.
+     */
+    export interface PerTextFilePluginAction extends PluginActionBase {
+        context: "per_text_file";
+        /**
+         * The action to run.
+         *
+         * @async
+         * @param {string} currentFileContent The current text content of the file as a string, with the modifications made by the previously executed plugin actions, modifications should be applied to this content.
+         * @param {zip.ZipFileEntry<any, any>} file The file.
+         * @param {zip.FS} zip The zip file system.
+         * @returns {string | Promise<string>} The new text content of the file as a string, or a promise resolving to a string.
+         * @throws {Error} If the action is unable to do what it needs to, make it throw an error.
+         */
+        action: (currentFileContent: string, file: zip.ZipFileEntry<any, any>, zip: zip.FS) => string | Promise<string>;
+    }
+    /**
+     * An action for a {@link Plugin} with a context of `per_binary_file`.
+     */
+    export interface PerBinaryFilePluginAction extends PluginActionBase {
+        context: "per_binary_file";
+        /**
+         * The action to run.
+         *
+         * @async
+         * @param {Blob} currentFileContent The current binary content of the file, as a {@link Blob}, with the modifications made by the previously executed plugin actions, modifications should be applied to this content.
+         * @param {zip.ZipFileEntry<any, any>} file The file.
+         * @param {zip.FS} zip The zip file system.
+         * @returns {Blob | Promise<Blob>} The new binary content of the file as a {@link Blob}, or a promise resolving to a {@link Blob}.
+         * @throws {Error} If the action is unable to do what it needs to, make it throw an error.
+         */
+        action: (currentFileContent: Blob, file: zip.ZipFileEntry<any, any>, zip: zip.FS) => Blob | Promise<Blob>;
+    }
+    /**
+     * An action for a {@link Plugin} with a context of `global_before`.
+     *
+     * @todo Make this plugin context type functional.
+     */
+    export interface GlobalBeforePluginAction extends PluginActionBase {
+        context: "global_before";
+        /**
+         * The action to run.
+         *
+         * @async
+         * @param {zip.FS} zip The zip file system.
+         * @returns {void | Promise<void>} A promise that resolves when the action is complete, or nothing.
+         * @throws {Error} If the action is unable to do what it needs to, make it throw an error.
+         */
+        action: (zip: zip.FS) => void | Promise<void>;
+    }
+    /**
+     * An action for a {@link Plugin} with a context of `global`.
+     *
+     * @todo Make this plugin context type functional.
+     */
+    export interface GlobalPluginAction extends PluginActionBase {
+        context: "global";
+        /**
+         * The action to run.
+         *
+         * @async
+         * @param {zip.FS} zip The zip file system.
+         * @returns {void | Promise<void>} A promise that resolves when the action is complete, or nothing.
+         * @throws {Error} If the action is unable to do what it needs to, make it throw an error.
+         */
+        action: (zip: zip.FS) => void | Promise<void>;
+    }
+    /**
+     * An action for a {@link Plugin}.
+     */
+    export type PluginAction = PerTextFilePluginAction | PerBinaryFilePluginAction | GlobalBeforePluginAction | GlobalPluginAction;
+    /**
+     * The built-in plugins.
+     */
+    export const builtInPlugins: [
+        {
+            readonly name: "Add exact ping count to servers tab.";
+            readonly id: "add-exact-ping-count-to-servers-tab";
+            readonly namespace: "built-in";
+            readonly version: "0.25.0";
+            readonly actions: [
+                {
+                    readonly id: "add-exact-ping-count-to-servers-tab";
+                    readonly context: "per_text_file";
+                    readonly action: (currentFileContent: string, file: zip.ZipFileEntry<any, any>) => Promise<string>;
+                }
+            ];
+            readonly format_version: "0.25.0";
+            readonly min_engine_version: "0.25.0";
+        },
+        {
+            readonly name: "Add max player count to servers tab.";
+            readonly id: "add-max-player-count-to-servers-tab";
+            readonly namespace: "built-in";
+            readonly version: "0.25.0";
+            readonly actions: [
+                {
+                    readonly id: "add-max-player-count-to-servers-tab";
+                    readonly context: "per_text_file";
+                    readonly action: (currentFileContent: string, file: zip.ZipFileEntry<any, any>) => Promise<string>;
+                }
+            ];
+            readonly format_version: "0.25.0";
+            readonly min_engine_version: "0.25.0";
+        }
+    ];
 }
+
