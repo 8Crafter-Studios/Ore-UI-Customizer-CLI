@@ -14,7 +14,7 @@ This is a CLI to install the latest update of 8Crafter's Ore UI Customizer on yo
 
 https://www.8crafter.com/utilities/ore-ui-customizer
 
-Using this requires that you either use [Bedrock Launcher](https://bedrocklauncher.github.io/) or IObit Unlocker (Bedrock Launcher is recommended).
+Using this requires that you either use [Bedrock Launcher](https://bedrocklauncher.github.io/), IObit Unlocker (Bedrock Launcher is recommended), or another custom Minecraft Bedrock Edition launcher.
 
 This node module also requires that you use Windows.
 
@@ -39,4 +39,5 @@ Options:
   -ec, --exportconfig                   Export the configuration file.
   --debug                               Enable debug logging.
   --source-website=<URI>                Makes the CLI use a custom source website instead of https://www.8crafter.com/, this is used for development if you have a locally running instance of the website, then you can use the localhost IP for it.
+  --version-folder=<path>               The path to the Minecraft version folder, use this if you use a custom Minecraft Bedrock Edition launcher other than bedrock launcher, the path should be the path to the folder for the Minecraft version you want to install the Ore UI Customizer on, the folder should contain a data folder which contains a gui folder.
 ```

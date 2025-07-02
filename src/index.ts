@@ -13,7 +13,7 @@ import * as CommentJSON from "comment-json";
 /**
  * The version of the script.
  */
-export const format_version = "1.9.0" as const;
+export const format_version = "1.10.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -42,6 +42,20 @@ if (configPath !== undefined) {
     } else {
         if (!existsSync(configPath)) {
             throw new ReferenceError(chalk.red(`The config file "${configPath}" does not exist.`));
+        }
+    }
+}
+
+/**
+ * The path to the Minecraft version folder.
+ */
+let versionFolderPath: string | undefined = flagsArgs.find((arg) => arg.startsWith("--version-folder="))?.slice("--version-folder=".length);
+if (versionFolderPath !== undefined) {
+    if (!versionFolderPath) {
+        versionFolderPath = undefined;
+    } else {
+        if (!existsSync(versionFolderPath)) {
+            throw new ReferenceError(chalk.red(`The folder "${versionFolderPath}" does not exist.`));
         }
     }
 }
@@ -144,7 +158,7 @@ if (!new RegExp(`[A-Z]:${path.sep === "\\" ? "\\\\" : path.sep}Users${path.sep =
 /**
  * The path to the Bedrock Launcher data folder.
  */
-export const mcBedrockFolderPath = path.join(userFolderPath, "AppData/Roaming/.minecraft_bedrock");
+export const mcBedrockFolderPath: string = path.join(userFolderPath, "AppData/Roaming/.minecraft_bedrock");
 /**
  * The type of Minecraft Bedrock Edition installation to install 8Crafter's Ore UI Customizer on.
  */
@@ -163,9 +177,19 @@ let configData: OreUICustomizerSettings | undefined = undefined;
 let configDataVersion: string | undefined = undefined;
 if (configPath) {
     if (path.extname(configPath) === ".json") {
-        const data: OreUICustomizerConfig = CommentJSON.parse(readFileSync(configPath).toString()) as any;
-        configData = data.oreUICustomizerConfig;
-        configDataVersion = data.oreUICustomizerVersion;
+        const data:
+            | OreUICustomizerConfig
+            | (OreUICustomizerConfig["oreUICustomizerConfig"] & { format_version: OreUICustomizerConfig["oreUICustomizerVersion"] }) = CommentJSON.parse(
+            readFileSync(configPath).toString()
+        ) as any;
+        if ("format_version" in data) {
+            configData = { ...data };
+            delete configData["format_version" as keyof typeof configData];
+            configDataVersion = data.format_version;
+        } else {
+            configData = data.oreUICustomizerConfig;
+            configDataVersion = data.oreUICustomizerVersion;
+        }
     } else if (path.extname(configPath) === ".js") {
         const data = await readJSCustomizerConfigFile(configPath);
         configData = data?.oreUICustomizerConfig;
@@ -173,268 +197,287 @@ if (configPath) {
     } else {
         throw new TypeError("Config file must be a JSON or JavaScript file.");
     }
-}
-try {
-    /**
-     * The path to the Bedrock Launcher versions folder.
-     */
-    const mcBedrockVersionsFolderPath: string = path.join(mcBedrockFolderPath, "versions");
-    /**
-     * The list of folders for all the currently installed Minecraft Bedrock Edition versions.
-     */
-    const bedrockLauncherVersionFolders: string[] = readdirSync(mcBedrockVersionsFolderPath).filter(
-        (versionFolder) => versionFolder.split("-").length === 5
-    ); /* 
-    const versionFolderCreationTimeMap: Map<string, number> = new Map();
-    for (const versionFolder of bedrockLauncherVersionFolders) {
-        const versionFolderCreationTime: number = statSync(path.join(mcBedrockVersionsFolderPath, versionFolder)).birthtimeMs;
-        versionFolderCreationTimeMap.set(versionFolder, versionFolderCreationTime);
+    if (!configData || !configDataVersion) {
+        throw new TypeError(
+            "There was an error parsing the config file: " +
+                (!configData && !configDataVersion ? "No config data or version found." : !configData ? "No config data found." : "No config version found.")
+        );
     }
-    bedrockLauncherVersionFolders.sort((a, b) => versionFolderCreationTimeMap.get(b)! - versionFolderCreationTimeMap.get(a)!); */
+    console.log(`Using config file: ${configPath}`);
+}
+
+if (versionFolderPath) {
+    versionFolder = versionFolderPath;
     accessType = "BedrockLauncher";
-    if (bedrockLauncherVersionFolders.length > 1) {
-        const versionNumbers: (`${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version.")[] =
-            bedrockLauncherVersionFolders.map((versionFolder) => {
-                const AppxManifestXML: string = path.join(mcBedrockVersionsFolderPath, versionFolder, "AppxManifest.xml");
-                const AppxManifestXMLContent: string = readFileSync(AppxManifestXML, "utf-8");
-                const AppxManifestXMLVersion: string | undefined = AppxManifestXMLContent.match(
-                    /\<Identity Name="(?:Microsoft\.MinecraftUWP|Microsoft\.MinecraftWindowsBeta)" Publisher="[^"]*" Version="([\d\.]+)"/
-                )?.[1];
-                if (!AppxManifestXMLVersion) {
-                    return "Unable to determine version." as const;
-                }
-                const AppxManifestXMLEdition: "Minecraft for Windows" | "Minecraft Windows Preview" | undefined = AppxManifestXMLContent.match(
-                    /\<DisplayName\>(Minecraft for Windows|Minecraft Windows Preview)\<\/DisplayName>/
-                )?.[1] as "Minecraft for Windows" | "Minecraft Windows Preview" | undefined;
-                const versionSegments = AppxManifestXMLVersion.split(".");
-                return `${Number(versionSegments[0])}.${Number(versionSegments[1])}.${Number(versionSegments[2]?.slice(0, -2))}.${Number(
-                    versionSegments[2]?.slice(-2)
-                )} (${AppxManifestXMLEdition === "Minecraft for Windows" ? "Release" : "Preview"})` as const;
-            });
+} else {
+    try {
         /**
-         * A map of version number to version folder.
+         * The path to the Bedrock Launcher versions folder.
          */
-        const versionNumberToFolderMap: Map<`${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version.", string> =
-            new Map();
+        const mcBedrockVersionsFolderPath: string = path.join(mcBedrockFolderPath, "versions");
         /**
-         * A map of version folder to version number.
+         * The list of folders for all the currently installed Minecraft Bedrock Edition versions.
          */
-        const versionFolderToNumberMap: Map<string, `${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version."> =
-            new Map();
-        /**
-         * Create a map of version number to version folder and version folder to version number.
-         */
-        for (const [v, i] of versionNumbers.map((v, i) => [v, i] as const)) {
-            versionNumberToFolderMap.set(v, bedrockLauncherVersionFolders[i]!);
-            versionFolderToNumberMap.set(bedrockLauncherVersionFolders[i]!, v);
+        const bedrockLauncherVersionFolders: string[] = readdirSync(mcBedrockVersionsFolderPath).filter(
+            (versionFolder) => versionFolder.split("-").length === 5
+        ); /* 
+        const versionFolderCreationTimeMap: Map<string, number> = new Map();
+        for (const versionFolder of bedrockLauncherVersionFolders) {
+            const versionFolderCreationTime: number = statSync(path.join(mcBedrockVersionsFolderPath, versionFolder)).birthtimeMs;
+            versionFolderCreationTimeMap.set(versionFolder, versionFolderCreationTime);
         }
-        /**
-         * Sort the {@link versionNumbers} array from highest to smallest version number.
-         */
-        versionNumbers.sort((a, b) =>
-            a === "Unable to determine version." && b !== "Unable to determine version."
-                ? 1
-                : a !== "Unable to determine version." && b === "Unable to determine version."
-                ? -1
-                : a === b
-                ? 0
-                : semver.eq(
-                      a
-                          .slice(0, -a.indexOf(" ("))
-                          .trim()
-                          .replace(/\.(?=\d+$)/, "-"),
-                      b
-                          .slice(0, -b.indexOf(" ("))
-                          .trim()
-                          .replace(/\.(?=\d+$)/, "-")
-                  )
-                ? 0
-                : semver.gt(
-                      b
-                          .slice(0, -b.indexOf(" ("))
-                          .trim()
-                          .replace(/\.(?=\d+$)/, "-"),
-                      a
-                          .slice(0, -a.indexOf(" ("))
-                          .trim()
-                          .replace(/\.(?=\d+$)/, "-")
-                  )
-                ? 1
-                : -1
-        );
-        /**
-         * Sort the {@link bedrockLauncherVersionFolders} array from highest to smallest version number.
-         */
-        for (const [v, i] of versionNumbers.map((v, i) => [v, i] as const)) {
-            bedrockLauncherVersionFolders[i] = versionNumberToFolderMap.get(v)!;
-        }
-        process.stdout.write(
-            `${chalk.yellowBright(
-                `Multiple Minecraft versions were found, please enter the number of the Minecraft version to ${
-                    mode === "install"
-                        ? "install 8Crafter's Ore UI Customizer on"
-                        : mode === "uninstall"
-                        ? "uninstall 8Crafter's Ore UI Customizer from"
-                        : "export the config of 8Crafter's Ore UI Customizer from"
-                }:`
-            )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\n`
-        );
-        /**
-         * Prompt the user to select a Minecraft version.
-         */
-        let folderSelection: string = prompt("Selection: ");
-        folderSelection = folderSelection.trim();
-        // If the user entered an invalid folder selection, log an error to the console and exit.
-        if (!Number(folderSelection) || Number(folderSelection) < 1 || Number(folderSelection) > versionNumbers.length) {
-            console.error("Invalid folder selection, please try again.");
-            process.exit(1);
-        }
-        versionFolder = path.join(mcBedrockVersionsFolderPath, bedrockLauncherVersionFolders[Number(folderSelection) - 1]!);
-        if (!configData) {
-            try {
+        bedrockLauncherVersionFolders.sort((a, b) => versionFolderCreationTimeMap.get(b)! - versionFolderCreationTimeMap.get(a)!); */
+        accessType = "BedrockLauncher";
+        if (bedrockLauncherVersionFolders.length > 1) {
+            const versionNumbers: (`${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version.")[] =
+                bedrockLauncherVersionFolders.map((versionFolder) => {
+                    const AppxManifestXML: string = path.join(mcBedrockVersionsFolderPath, versionFolder, "AppxManifest.xml");
+                    const AppxManifestXMLContent: string = readFileSync(AppxManifestXML, "utf-8");
+                    const AppxManifestXMLVersion: string | undefined = AppxManifestXMLContent.match(
+                        /\<Identity Name="(?:Microsoft\.MinecraftUWP|Microsoft\.MinecraftWindowsBeta)" Publisher="[^"]*" Version="([\d\.]+)"/
+                    )?.[1];
+                    if (!AppxManifestXMLVersion) {
+                        return "Unable to determine version." as const;
+                    }
+                    const AppxManifestXMLEdition: "Minecraft for Windows" | "Minecraft Windows Preview" | undefined = AppxManifestXMLContent.match(
+                        /\<DisplayName\>(Minecraft for Windows|Minecraft Windows Preview)\<\/DisplayName>/
+                    )?.[1] as "Minecraft for Windows" | "Minecraft Windows Preview" | undefined;
+                    const versionSegments = AppxManifestXMLVersion.split(".");
+                    return `${Number(versionSegments[0])}.${Number(versionSegments[1])}.${Number(versionSegments[2]?.slice(0, -2))}.${Number(
+                        versionSegments[2]?.slice(-2)
+                    )} (${AppxManifestXMLEdition === "Minecraft for Windows" ? "Release" : "Preview"})` as const;
+                });
+            /**
+             * A map of version number to version folder.
+             */
+            const versionNumberToFolderMap: Map<`${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version.", string> =
+                new Map();
+            /**
+             * A map of version folder to version number.
+             */
+            const versionFolderToNumberMap: Map<string, `${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version."> =
+                new Map();
+            /**
+             * Create a map of version number to version folder and version folder to version number.
+             */
+            for (const [v, i] of versionNumbers.map((v, i) => [v, i] as const)) {
+                versionNumberToFolderMap.set(v, bedrockLauncherVersionFolders[i]!);
+                versionFolderToNumberMap.set(bedrockLauncherVersionFolders[i]!, v);
+            }
+            /**
+             * Sort the {@link versionNumbers} array from highest to smallest version number.
+             */
+            versionNumbers.sort((a, b) =>
+                a === "Unable to determine version." && b !== "Unable to determine version."
+                    ? 1
+                    : a !== "Unable to determine version." && b === "Unable to determine version."
+                    ? -1
+                    : a === b
+                    ? 0
+                    : semver.eq(
+                          a
+                              .slice(0, -a.indexOf(" ("))
+                              .trim()
+                              .replace(/\.(?=\d+$)/, "-"),
+                          b
+                              .slice(0, -b.indexOf(" ("))
+                              .trim()
+                              .replace(/\.(?=\d+$)/, "-")
+                      )
+                    ? 0
+                    : semver.gt(
+                          b
+                              .slice(0, -b.indexOf(" ("))
+                              .trim()
+                              .replace(/\.(?=\d+$)/, "-"),
+                          a
+                              .slice(0, -a.indexOf(" ("))
+                              .trim()
+                              .replace(/\.(?=\d+$)/, "-")
+                      )
+                    ? 1
+                    : -1
+            );
+            /**
+             * Sort the {@link bedrockLauncherVersionFolders} array from highest to smallest version number.
+             */
+            for (const [v, i] of versionNumbers.map((v, i) => [v, i] as const)) {
+                bedrockLauncherVersionFolders[i] = versionNumberToFolderMap.get(v)!;
+            }
+            process.stdout.write(
+                `${chalk.yellowBright(
+                    `Multiple Minecraft versions were found, please enter the number of the Minecraft version to ${
+                        mode === "install"
+                            ? "install 8Crafter's Ore UI Customizer on"
+                            : mode === "uninstall"
+                            ? "uninstall 8Crafter's Ore UI Customizer from"
+                            : "export the config of 8Crafter's Ore UI Customizer from"
+                    }:`
+                )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\n`
+            );
+            /**
+             * Prompt the user to select a Minecraft version.
+             */
+            let folderSelection: string = prompt("Selection: ");
+            folderSelection = folderSelection.trim();
+            // If the user entered an invalid folder selection, log an error to the console and exit.
+            if (!Number(folderSelection) || Number(folderSelection) < 1 || Number(folderSelection) > versionNumbers.length) {
+                console.error("Invalid folder selection, please try again.");
+                process.exit(1);
+            }
+            versionFolder = path.join(mcBedrockVersionsFolderPath, bedrockLauncherVersionFolders[Number(folderSelection) - 1]!);
+            if (!configData) {
                 try {
-                    const data = await getCurrentCustomizerConfigurationAndVersion(versionFolder);
-                    configData = data?.oreUICustomizerConfig;
-                    configDataVersion = data?.oreUICustomizerVersion; /* 
-                    if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
-                        configData = await import(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"));
-                    } */
-                } catch {}
-                if (!configData) {
-                    /**
-                     * The release stage of the Minecraft Bedrock Edition version the user selected.
-                     */
-                    const selectionReleaseStage: "Release" | "Preview" | undefined = versionFolderToNumberMap.get(versionFolder)!.endsWith("(Preview)")
-                        ? "Preview"
-                        : versionFolderToNumberMap.get(versionFolder)!.endsWith("(Release)")
-                        ? "Release"
-                        : undefined;
-                    /**
-                     * The version folders ordered by the order they should be searched for an Ore UI Customizer config file in.
-                     */
-                    const bedrockLauncherVersionFoldersOrderedByConfigSearchOrder: string[] =
-                        selectionReleaseStage === undefined
-                            ? bedrockLauncherVersionFolders
-                            : [
-                                  ...bedrockLauncherVersionFolders.filter((versionFolder) =>
-                                      versionFolderToNumberMap.get(versionFolder)?.endsWith(selectionReleaseStage)
-                                  ),
-                                  ...bedrockLauncherVersionFolders.filter(
-                                      (versionFolder) =>
-                                          !versionFolderToNumberMap.get(versionFolder)?.endsWith(selectionReleaseStage === "Preview" ? "Release" : "Preview")
-                                  ),
-                                  ...bedrockLauncherVersionFolders.filter(
-                                      (versionFolder) => versionFolderToNumberMap.get(versionFolder) === "Unable to determine version."
-                                  ),
-                              ];
-                    /**
-                     * Search for the Ore UI Customizer config file in the version folders.
-                     */
-                    for (const versionFolderToSearch of bedrockLauncherVersionFoldersOrderedByConfigSearchOrder) {
-                        if (versionFolderToSearch === versionFolder) {
-                            continue;
-                        }
-                        try {
-                            const data = await getCurrentCustomizerConfigurationAndVersion(versionFolderToSearch);
-                            configData = data?.oreUICustomizerConfig;
-                            configDataVersion = data?.oreUICustomizerVersion;
-                            /* if (!existsSync(path.join(versionFolderToSearch, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
+                    try {
+                        const data = await getCurrentCustomizerConfigurationAndVersion(versionFolder);
+                        configData = data?.oreUICustomizerConfig;
+                        configDataVersion = data?.oreUICustomizerVersion; /* 
+                        if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
+                            configData = await import(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"));
+                        } */
+                    } catch {}
+                    if (!configData) {
+                        /**
+                         * The release stage of the Minecraft Bedrock Edition version the user selected.
+                         */
+                        const selectionReleaseStage: "Release" | "Preview" | undefined = versionFolderToNumberMap.get(versionFolder)!.endsWith("(Preview)")
+                            ? "Preview"
+                            : versionFolderToNumberMap.get(versionFolder)!.endsWith("(Release)")
+                            ? "Release"
+                            : undefined;
+                        /**
+                         * The version folders ordered by the order they should be searched for an Ore UI Customizer config file in.
+                         */
+                        const bedrockLauncherVersionFoldersOrderedByConfigSearchOrder: string[] =
+                            selectionReleaseStage === undefined
+                                ? bedrockLauncherVersionFolders
+                                : [
+                                      ...bedrockLauncherVersionFolders.filter((versionFolder) =>
+                                          versionFolderToNumberMap.get(versionFolder)?.endsWith(selectionReleaseStage)
+                                      ),
+                                      ...bedrockLauncherVersionFolders.filter(
+                                          (versionFolder) =>
+                                              !versionFolderToNumberMap
+                                                  .get(versionFolder)
+                                                  ?.endsWith(selectionReleaseStage === "Preview" ? "Release" : "Preview")
+                                      ),
+                                      ...bedrockLauncherVersionFolders.filter(
+                                          (versionFolder) => versionFolderToNumberMap.get(versionFolder) === "Unable to determine version."
+                                      ),
+                                  ];
+                        /**
+                         * Search for the Ore UI Customizer config file in the version folders.
+                         */
+                        for (const versionFolderToSearch of bedrockLauncherVersionFoldersOrderedByConfigSearchOrder) {
+                            if (versionFolderToSearch === versionFolder) {
                                 continue;
                             }
-                            configData = await import(path.join(versionFolderToSearch, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js")); */
-                            if (configData) {
-                                break;
+                            try {
+                                const data = await getCurrentCustomizerConfigurationAndVersion(versionFolderToSearch);
+                                configData = data?.oreUICustomizerConfig;
+                                configDataVersion = data?.oreUICustomizerVersion;
+                                /* if (!existsSync(path.join(versionFolderToSearch, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
+                                    continue;
+                                }
+                                configData = await import(path.join(versionFolderToSearch, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js")); */
+                                if (configData) {
+                                    break;
+                                }
+                            } catch {}
+                        }
+                    }
+                } catch {}
+            }
+        } else if (bedrockLauncherVersionFolders.length === 1) {
+            versionFolder = path.join(mcBedrockVersionsFolderPath, bedrockLauncherVersionFolders[0]!);
+            try {
+                const data = await getCurrentCustomizerConfigurationAndVersion(bedrockLauncherVersionFolders[0]!);
+                configData = data?.oreUICustomizerConfig;
+                configDataVersion = data?.oreUICustomizerVersion;
+            } catch {}
+        } else {
+            console.error(
+                chalk.red(
+                    "No Minecraft Bedrock versions found. If you are using a custom Minecraft Bedrock Edition launcher other than Bedrock Launcher, please use the --version-folder option to specify the version folder to install the Ore UI Customizer on, refer the the README for more information."
+                )
+            );
+            process.exit(1);
+        }
+    } catch (e) {
+        const WindowsAppsFolders: string[] = readdirSync(path.join(path.parse(userFolderPath).root, "Program Files", "WindowsApps"));
+        if (WindowsAppsFolders.some((folder) => folder.startsWith("Microsoft.MinecraftUWP") || folder.startsWith("Microsoft.MinecraftWindowsBeta"))) {
+            const minecraftVersionFolders: string[] = WindowsAppsFolders.filter(
+                (folder) => folder.startsWith("Microsoft.MinecraftUWP") || folder.startsWith("Microsoft.MinecraftWindowsBeta")
+            );
+            accessType = "IObit Unlocker";
+            if (minecraftVersionFolders.length > 2) {
+                console.error(
+                    "Found too many Minecraft installations, there are more than 2 folders in the WindowsApps folder starting with 'Microsoft.MinecraftUWP' or 'Microsoft.MinecraftWindowsBeta'."
+                );
+                process.exit(1);
+            }
+            if (minecraftVersionFolders.length === 2) {
+                const selectPreviewInput: string = prompt({
+                    ask: `Would you like to ${
+                        mode === "install"
+                            ? "install 8Crafter's Ore UI Customizer on"
+                            : mode === "uninstall"
+                            ? "uninstall 8Crafter's Ore UI Customizer from"
+                            : "export the config of 8Crafter's Ore UI Customizer from"
+                    } the Minecraft Preview or Release version?\n1: Release\n2: Preview\nSelection: `,
+                }).trim();
+                if (!["1", "2"].includes(selectPreviewInput)) {
+                    console.error(`Invalid selection: ${JSON.stringify(selectPreviewInput)}, expected either 1 or 2.`);
+                    process.exit(1);
+                }
+                const selectPreview: boolean = selectPreviewInput === "2";
+                versionFolder = path.join(
+                    path.parse(userFolderPath).root,
+                    "Program Files",
+                    "WindowsApps",
+                    selectPreview
+                        ? minecraftVersionFolders.find((folder) => folder.startsWith("Microsoft.MinecraftWindowsBeta"))!
+                        : minecraftVersionFolders.find((folder) => folder.startsWith("Microsoft.MinecraftUWP"))! /* "Microsoft.MinecraftUWP_8wekyb3d8bbwe" */
+                );
+                try {
+                    try {
+                        if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
+                            const data = await getCurrentCustomizerConfigurationAndVersion(versionFolder);
+                            configData = data?.oreUICustomizerConfig;
+                            configDataVersion = data?.oreUICustomizerVersion;
+                        }
+                    } catch {}
+                    if (!configData) {
+                        try {
+                            const otherVersionFolder: string = minecraftVersionFolders.find((folder) => folder !== versionFolder)!;
+                            if (existsSync(path.join(otherVersionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
+                                const data = await getCurrentCustomizerConfigurationAndVersion(otherVersionFolder);
+                                configData = data?.oreUICustomizerConfig;
+                                configDataVersion = data?.oreUICustomizerVersion;
                             }
                         } catch {}
                     }
-                }
-            } catch {}
-        }
-    } else if (bedrockLauncherVersionFolders.length === 1) {
-        versionFolder = path.join(mcBedrockVersionsFolderPath, bedrockLauncherVersionFolders[0]!);
-        try {
-            const data = await getCurrentCustomizerConfigurationAndVersion(bedrockLauncherVersionFolders[0]!);
-            configData = data?.oreUICustomizerConfig;
-            configDataVersion = data?.oreUICustomizerVersion;
-        } catch {}
-    } else {
-        console.error("No Minecraft Bedrock versions found.");
-        process.exit(1);
-    }
-} catch (e) {
-    const WindowsAppsFolders: string[] = readdirSync(path.join(path.parse(userFolderPath).root, "Program Files", "WindowsApps"));
-    if (WindowsAppsFolders.some((folder) => folder.startsWith("Microsoft.MinecraftUWP") || folder.startsWith("Microsoft.MinecraftWindowsBeta"))) {
-        const minecraftVersionFolders: string[] = WindowsAppsFolders.filter(
-            (folder) => folder.startsWith("Microsoft.MinecraftUWP") || folder.startsWith("Microsoft.MinecraftWindowsBeta")
-        );
-        accessType = "IObit Unlocker";
-        if (minecraftVersionFolders.length > 2) {
-            console.error(
-                "Found too many Minecraft installations, there are more than 2 folders in the WindowsApps folder starting with 'Microsoft.MinecraftUWP' or 'Microsoft.MinecraftWindowsBeta'."
-            );
-            process.exit(1);
-        }
-        if (minecraftVersionFolders.length === 2) {
-            const selectPreviewInput: string = prompt({
-                ask: `Would you like to ${
-                    mode === "install"
-                        ? "install 8Crafter's Ore UI Customizer on"
-                        : mode === "uninstall"
-                        ? "uninstall 8Crafter's Ore UI Customizer from"
-                        : "export the config of 8Crafter's Ore UI Customizer from"
-                } the Minecraft Preview or Release version?\n1: Release\n2: Preview\nSelection: `,
-            }).trim();
-            if (!["1", "2"].includes(selectPreviewInput)) {
-                console.error(`Invalid selection: ${JSON.stringify(selectPreviewInput)}, expected either 1 or 2.`);
-                process.exit(1);
-            }
-            const selectPreview: boolean = selectPreviewInput === "2";
-            versionFolder = path.join(
-                path.parse(userFolderPath).root,
-                "Program Files",
-                "WindowsApps",
-                selectPreview
-                    ? minecraftVersionFolders.find((folder) => folder.startsWith("Microsoft.MinecraftWindowsBeta"))!
-                    : minecraftVersionFolders.find((folder) => folder.startsWith("Microsoft.MinecraftUWP"))! /* "Microsoft.MinecraftUWP_8wekyb3d8bbwe" */
-            );
-            try {
-                try {
-                    if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
-                        const data = await getCurrentCustomizerConfigurationAndVersion(versionFolder);
-                        configData = data?.oreUICustomizerConfig;
-                        configDataVersion = data?.oreUICustomizerVersion;
-                    }
                 } catch {}
+            } else {
+                versionFolder = path.join(path.parse(userFolderPath).root, "Program Files", "WindowsApps", minecraftVersionFolders[0]!);
                 if (!configData) {
                     try {
-                        const otherVersionFolder: string = minecraftVersionFolders.find((folder) => folder !== versionFolder)!;
-                        if (existsSync(path.join(otherVersionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
-                            const data = await getCurrentCustomizerConfigurationAndVersion(otherVersionFolder);
+                        if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
+                            const data = await getCurrentCustomizerConfigurationAndVersion(versionFolder);
                             configData = data?.oreUICustomizerConfig;
                             configDataVersion = data?.oreUICustomizerVersion;
                         }
                     } catch {}
                 }
-            } catch {}
-        } else {
-            versionFolder = path.join(path.parse(userFolderPath).root, "Program Files", "WindowsApps", minecraftVersionFolders[0]!);
-            if (!configData) {
-                try {
-                    if (existsSync(path.join(versionFolder, "data/gui/dist/hbui/oreUICustomizer8CrafterConfig.js"))) {
-                        const data = await getCurrentCustomizerConfigurationAndVersion(versionFolder);
-                        configData = data?.oreUICustomizerConfig;
-                        configDataVersion = data?.oreUICustomizerVersion;
-                    }
-                } catch {}
             }
+        } else if (readdirSync(path.join(path.parse(userFolderPath).root, "Program Files")).some((folder) => folder.startsWith("BedrockLauncher"))) {
+            accessType = "BedrockLauncher";
+            console.error(`Bedrock Launcher was detected but something went wrong, the following error occurred: ${e}${(e as any)?.stack}`);
+            process.exit(1);
+        } else {
+            console.error("Minecraft Bedrock Edition installation not found.");
+            process.exit(1);
         }
-    } else if (readdirSync(path.join(path.parse(userFolderPath).root, "Program Files")).some((folder) => folder.startsWith("BedrockLauncher"))) {
-        accessType = "BedrockLauncher";
-        console.error(`Bedrock Launcher was detected but something went wrong, the following error occurred: ${e}${(e as any)?.stack}`);
-        process.exit(1);
-    } else {
-        console.error("Minecraft Bedrock Edition installation not found.");
-        process.exit(1);
     }
 }
 
@@ -1219,7 +1262,10 @@ switch (mode) {
     }
     case "exportConfig": {
         const exportLocation = prompt("Please enter the path to export the config to: ");
-        writeFileSync(exportLocation, CommentJSON.stringify({ oreUICustomizerConfig: configData, oreUICustomizerVersion: configDataVersion } as OreUICustomizerConfig, null, 4));
+        writeFileSync(
+            exportLocation,
+            CommentJSON.stringify({ oreUICustomizerConfig: configData, oreUICustomizerVersion: configDataVersion } as OreUICustomizerConfig, null, 4)
+        );
         break;
     }
 }
