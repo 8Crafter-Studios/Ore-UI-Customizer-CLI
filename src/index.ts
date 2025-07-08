@@ -8,12 +8,13 @@ import type { ApplyModsResult } from "OreUICustomizerAPI";
 import type { OreUICustomizerConfig, OreUICustomizerSettings } from "OreUICustomizerAssets";
 import { exec, type ExecException } from "child_process";
 import * as CommentJSON from "comment-json";
+import { stdout } from "process";
 // import progress from "progress";
 
 /**
  * The version of the script.
  */
-export const format_version = "1.10.0" as const;
+export const format_version = "1.11.0" as const;
 
 //---------------------------------------------------------------------------
 // Arguments
@@ -219,7 +220,7 @@ if (versionFolderPath) {
          * The list of folders for all the currently installed Minecraft Bedrock Edition versions.
          */
         const bedrockLauncherVersionFolders: string[] = readdirSync(mcBedrockVersionsFolderPath).filter(
-            (versionFolder) => versionFolder.split("-").length === 5
+            (versionFolder: string): boolean => versionFolder !== "AppxBackups"
         ); /* 
         const versionFolderCreationTimeMap: Map<string, number> = new Map();
         for (const versionFolder of bedrockLauncherVersionFolders) {
@@ -229,34 +230,67 @@ if (versionFolderPath) {
         bedrockLauncherVersionFolders.sort((a, b) => versionFolderCreationTimeMap.get(b)! - versionFolderCreationTimeMap.get(a)!); */
         accessType = "BedrockLauncher";
         if (bedrockLauncherVersionFolders.length > 1) {
-            const versionNumbers: (`${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version.")[] =
-                bedrockLauncherVersionFolders.map((versionFolder) => {
-                    const AppxManifestXML: string = path.join(mcBedrockVersionsFolderPath, versionFolder, "AppxManifest.xml");
-                    const AppxManifestXMLContent: string = readFileSync(AppxManifestXML, "utf-8");
-                    const AppxManifestXMLVersion: string | undefined = AppxManifestXMLContent.match(
-                        /\<Identity Name="(?:Microsoft\.MinecraftUWP|Microsoft\.MinecraftWindowsBeta)" Publisher="[^"]*" Version="([\d\.]+)"/
-                    )?.[1];
-                    if (!AppxManifestXMLVersion) {
-                        return "Unable to determine version." as const;
+            const versionNumbers: (
+                | `${number}.${number}.${number}.${number} (${"Release" | "Preview" | "Unknown"}${"" | " [Dev]"})`
+                | "Unable to determine version."
+            )[] = bedrockLauncherVersionFolders.map((versionFolder: string) => {
+                const AppxManifestXML: string = path.join(mcBedrockVersionsFolderPath, versionFolder, "AppxManifest.xml");
+                const AppxManifestXMLContent: string = readFileSync(AppxManifestXML, "utf-8");
+                const AppxManifestXMLVersion: `${number}.${number}.${number}.${number}` | undefined = AppxManifestXMLContent.match(
+                    /\<Identity Name="(?:Microsoft\.MinecraftUWP|Microsoft\.MinecraftWindowsBeta)" Publisher="[^"]*" Version="([\d\.]+)"/
+                )?.[1] as `${number}.${number}.${number}.${number}` | undefined;
+                const [AppxManifestPhoneProductId, AppxManifestPhonePublisherId]: [
+                    AppxManifestPhoneProductId: string | undefined,
+                    AppxManifestPhonePublisherId: string | undefined
+                ] = AppxManifestXMLContent.match(/\<mp:PhoneIdentity PhoneProductId="([a-f0-9\-]+)" PhonePublisherId="([a-f0-9\-]+)" \/\>/)?.slice(1, 3) as [
+                    AppxManifestPhoneProductId: string | undefined,
+                    AppxManifestPhonePublisherId: string | undefined
+                ];
+                if (!AppxManifestXMLVersion) {
+                    return "Unable to determine version." as const;
+                }
+                const AppxManifestXMLEdition: "Microsoft.MinecraftUWP" | "Microsoft.MinecraftWindowsBeta" | undefined = AppxManifestXMLContent.match(
+                    /\<Identity Name="(Microsoft\.MinecraftUWP|Microsoft\.MinecraftWindowsBeta)" Publisher="[^"]*" Version="(?:[\d\.]+)"/
+                )?.[1] as "Microsoft.MinecraftUWP" | "Microsoft.MinecraftWindowsBeta" | undefined;
+                const versionSegments = AppxManifestXMLVersion.split(".") as [`${number}`, `${number}`, `${number}`, `${number}`];
+                let version: `${number}.${number}.${number}.${number}`;
+                if (versionSegments[0] === "0") {
+                    if (versionSegments[1].length < 4) {
+                        version = `0.${Number(versionSegments[1]?.slice(0, -1))}.${Number(versionSegments[1]?.slice(-1))}.${Number(
+                            versionSegments[2]
+                        )}` as const;
+                    } else {
+                        version = `0.${Number(versionSegments[1]?.slice(0, -2))}.${Number(versionSegments[1]?.slice(-2))}.${Number(
+                            versionSegments[2]
+                        )}` as const;
                     }
-                    const AppxManifestXMLEdition: "Minecraft for Windows" | "Minecraft Windows Preview" | undefined = AppxManifestXMLContent.match(
-                        /\<DisplayName\>(Minecraft for Windows|Minecraft Windows Preview)\<\/DisplayName>/
-                    )?.[1] as "Minecraft for Windows" | "Minecraft Windows Preview" | undefined;
-                    const versionSegments = AppxManifestXMLVersion.split(".");
-                    return `${Number(versionSegments[0])}.${Number(versionSegments[1])}.${Number(versionSegments[2]?.slice(0, -2))}.${Number(
+                } else {
+                    version = `${Number(versionSegments[0])}.${Number(versionSegments[1])}.${Number(versionSegments[2]?.slice(0, -2))}.${Number(
                         versionSegments[2]?.slice(-2)
-                    )} (${AppxManifestXMLEdition === "Minecraft for Windows" ? "Release" : "Preview"})` as const;
-                });
+                    )}` as const;
+                }
+                return `${version} (${
+                    AppxManifestXMLEdition === "Microsoft.MinecraftUWP"
+                        ? "Release"
+                        : AppxManifestXMLEdition === "Microsoft.MinecraftWindowsBeta"
+                        ? "Preview"
+                        : "Unknown"
+                }${AppxManifestPhonePublisherId === "00000000-0000-0000-0000-000000000000" ? " [Dev]" : ""})` as const;
+            });
             /**
              * A map of version number to version folder.
              */
-            const versionNumberToFolderMap: Map<`${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version.", string> =
-                new Map();
+            const versionNumberToFolderMap: Map<
+                `${number}.${number}.${number}.${number} (${"Release" | "Preview" | "Unknown"}${"" | " [Dev]"})` | "Unable to determine version.",
+                string
+            > = new Map();
             /**
              * A map of version folder to version number.
              */
-            const versionFolderToNumberMap: Map<string, `${number}.${number}.${number}.${number} (${"Release" | "Preview"})` | "Unable to determine version."> =
-                new Map();
+            const versionFolderToNumberMap: Map<
+                string,
+                `${number}.${number}.${number}.${number} (${"Release" | "Preview" | "Unknown"}${"" | " [Dev]"})` | "Unable to determine version."
+            > = new Map();
             /**
              * Create a map of version number to version folder and version folder to version number.
              */
@@ -274,29 +308,22 @@ if (versionFolderPath) {
                     ? -1
                     : a === b
                     ? 0
-                    : semver.eq(
-                          a
-                              .slice(0, -a.indexOf(" ("))
-                              .trim()
-                              .replace(/\.(?=\d+$)/, "-"),
+                    : semver.compare(
                           b
-                              .slice(0, -b.indexOf(" ("))
+                              .slice(0, b.indexOf(" ("))
                               .trim()
-                              .replace(/\.(?=\d+$)/, "-")
-                      )
-                    ? 0
-                    : semver.gt(
-                          b
-                              .slice(0, -b.indexOf(" ("))
-                              .trim()
-                              .replace(/\.(?=\d+$)/, "-"),
+                              .split(".")
+                              .map((v, i) => (i === 3 ? "-" + v : i === 0 ? v : "." + v))
+                              .join("")
+                              .trim(),
                           a
-                              .slice(0, -a.indexOf(" ("))
+                              .slice(0, a.indexOf(" ("))
                               .trim()
-                              .replace(/\.(?=\d+$)/, "-")
+                              .split(".")
+                              .map((v, i) => (i === 3 ? "-" + v : i === 0 ? v : "." + v))
+                              .join("")
+                              .trim()
                       )
-                    ? 1
-                    : -1
             );
             /**
              * Sort the {@link bedrockLauncherVersionFolders} array from highest to smallest version number.
@@ -313,7 +340,40 @@ if (versionFolderPath) {
                             ? "uninstall 8Crafter's Ore UI Customizer from"
                             : "export the config of 8Crafter's Ore UI Customizer from"
                     }:`
-                )}\n${versionNumbers.map((v, i) => `${i + 1}: ${v}`).join("\n")}\n`
+                )}\n${(() => {
+                    const versionList = versionNumbers.map(
+                        (v, i) =>
+                            `${(chalk.rgb(0, 255, 136)(i + 1) + ": ").padStart(
+                                String(versionNumbers.length).length + 2 + chalk.rgb(0, 255, 136)(i + 1).length - String(i + 1).length,
+                                " "
+                            )}${
+                                v === "Unable to determine version."
+                                    ? chalk.red(v)
+                                    : `${chalk.rgb(0, 255, 255)(v.split(" ")[0])} (${((stage: "Release" | "Preview" | "Unknown", dev: "" | "[Dev]"): string =>
+                                          (stage === "Release"
+                                              ? chalk.rgb(0, 255, 0)("Release")
+                                              : stage === "Preview"
+                                              ? chalk.rgb(255, 255, 0)("Preview")
+                                              : stage === "Unknown"
+                                              ? chalk.rgb(255, 0, 0)("Unknown")
+                                              : stage) + (dev === "[Dev]" ? " [" + chalk.rgb(255, 0, 0)("Dev") + "]" : ""))(
+                                          ...(v
+                                              .replaceAll(/[\(\)]/g, "")
+                                              .split(" ")
+                                              .slice(1) as [any, any])
+                                      )})`
+                            }`
+                    );
+                    const baseLength = Math.min(
+                        versionNumbers.reduce((previousValueLength, value, i) => Math.max(previousValueLength, value.length + String(i + 1).length), 0) + 7,
+                        stdout.getWindowSize()[0]
+                    );
+                    return versionList
+                        .map((v, i) =>
+                            (i % 2 === 0 ? chalk.bgRgb(25, 25, 25) : chalk.bgRgb(0, 0, 0))(v.padEnd(baseLength + v.length - versionNumbers[i]!.length - 2, " "))
+                        )
+                        .join("\n");
+                })()}\n`
             );
             /**
              * Prompt the user to select a Minecraft version.
