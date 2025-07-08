@@ -1,6 +1,6 @@
 {
     "name": "ore-ui-customizer-cli",
-    "version": "1.10.0",
+    "version": "1.11.0",
     "description": "A CLI to install the latest update of 8Crafter's Ore UI Customizer to your Minecraft installation.",
     "keywords": [
         "8Crafter",
